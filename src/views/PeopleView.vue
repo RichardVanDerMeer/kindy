@@ -1,0 +1,135 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { ChevronRight, Plus, Search, Star } from '@lucide/vue'
+import { useRouter } from 'vue-router'
+
+import AddPersonDialog from '@/components/AddPersonDialog.vue'
+import PersonAvatar from '@/components/PersonAvatar.vue'
+import ViewHeader from '@/components/ViewHeader.vue'
+import { normalizeText } from '@/domain/duplicates'
+import { useKindyStore } from '@/stores/kindy'
+
+const store = useKindyStore()
+const router = useRouter()
+const query = ref('')
+const filter = ref<'all' | 'favorites' | string>('all')
+const showAddPerson = ref(false)
+
+const filteredPeople = computed(() => {
+  const normalizedQuery = normalizeText(query.value)
+  const memberships = store.data?.memberships ?? []
+  return store.people.filter((person) => {
+    const matchesFilter =
+      filter.value === 'all' ||
+      (filter.value === 'favorites' && person.isFavorite) ||
+      memberships.some(
+        (membership) => membership.circleId === filter.value && membership.personId === person.id,
+      )
+    const searchable = normalizeText(
+      [person.displayName, person.nickname, person.howWeMet, ...person.details.map((item) => item.value)]
+        .filter(Boolean)
+        .join(' '),
+    )
+    return matchesFilter && (!normalizedQuery || searchable.includes(normalizedQuery))
+  })
+})
+
+function circleCount(circleId: string): number {
+  return (store.data?.memberships ?? []).filter(
+    (membership) => membership.circleId === circleId && !membership.endedOn,
+  ).length
+}
+
+function personSubtitle(personId: string): string {
+  return store
+    .circleMemberships(personId)
+    .map((membership) => membership.circle?.name)
+    .filter(Boolean)
+    .join(' · ')
+}
+
+async function addPerson(input: { displayName: string; howWeMet?: string }): Promise<void> {
+  const person = await store.addPerson(input)
+  showAddPerson.value = false
+  await router.push({ name: 'person', params: { id: person.id } })
+}
+</script>
+
+<template>
+  <section class="view people-view">
+    <ViewHeader />
+    <h1>{{ $t('people.title') }}</h1>
+
+    <label class="search-field">
+      <Search :size="22" aria-hidden="true" />
+      <span class="sr-only">{{ $t('people.searchPlaceholder') }}</span>
+      <input v-model="query" type="search" :placeholder="$t('people.searchPlaceholder')" />
+    </label>
+
+    <div class="filter-row" aria-label="Filters">
+      <button class="chip" :class="{ 'chip--active': filter === 'all' }" @click="filter = 'all'">
+        {{ $t('people.all') }}
+      </button>
+      <button
+        class="chip"
+        :class="{ 'chip--active': filter === 'favorites' }"
+        @click="filter = 'favorites'"
+      >
+        <Star :size="16" /> {{ $t('people.favorites') }}
+      </button>
+      <button
+        v-for="circle in store.circles"
+        :key="circle.id"
+        class="chip"
+        :class="[`chip--${circle.colorToken}`, { 'chip--active': filter === circle.id }]"
+        @click="filter = circle.id"
+      >
+        {{ circle.name }}
+      </button>
+    </div>
+
+    <div v-if="store.circles.length" class="circle-summary" aria-label="Circle summary">
+      <button
+        v-for="circle in store.circles.slice(0, 3)"
+        :key="circle.id"
+        class="circle-tile"
+        :class="`surface--${circle.colorToken}`"
+        @click="filter = circle.id"
+      >
+        <span class="circle-tile__icon" aria-hidden="true">{{ circle.iconKey === 'home' ? '⌂' : '○' }}</span>
+        <strong>{{ circle.name }}</strong>
+        <span>{{ circleCount(circle.id) }}</span>
+      </button>
+    </div>
+
+    <div v-if="filteredPeople.length" class="person-list">
+      <article v-for="(person, index) in filteredPeople" :key="person.id" class="person-row">
+        <button class="person-row__main" @click="router.push(`/people/${person.id}`)">
+          <PersonAvatar :name="person.displayName" :photo-ref="person.photoRef" :tone="index" />
+          <span class="person-row__copy">
+            <strong>{{ person.displayName }}</strong>
+            <span>{{ personSubtitle(person.id) || person.howWeMet || $t('brand.descriptor') }}</span>
+          </span>
+        </button>
+        <button
+          class="icon-button icon-button--star"
+          :aria-label="$t('profile.favorite')"
+          @click="store.toggleFavorite(person.id)"
+        >
+          <Star :size="23" :fill="person.isFavorite ? 'currentColor' : 'none'" />
+        </button>
+        <ChevronRight :size="21" aria-hidden="true" />
+      </article>
+    </div>
+
+    <div v-else class="empty-state card">
+      <h2>{{ $t('people.empty') }}</h2>
+      <p>{{ $t('people.emptyHint') }}</p>
+    </div>
+
+    <button class="floating-action" :aria-label="$t('people.add')" @click="showAddPerson = true">
+      <Plus :size="32" />
+    </button>
+    <AddPersonDialog :open="showAddPerson" @close="showAddPerson = false" @save="addPerson" />
+  </section>
+</template>

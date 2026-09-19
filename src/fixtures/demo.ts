@@ -1,0 +1,145 @@
+import type { KindyData } from '@/domain/model'
+
+const now = Date.now()
+
+export const demoData: KindyData = {
+  schemaVersion: 1,
+  people: [
+    {
+      id: 'demo-alex',
+      displayName: 'Alex Morgan',
+      givenName: 'Alex',
+      familyName: 'Morgan',
+      isFavorite: true,
+      isArchived: false,
+      isDeceased: false,
+      howWeMet: 'Met through the neighbourhood garden',
+      contactPoints: [],
+      details: [
+        {
+          id: 'detail-alex-work',
+          definitionId: 'occupation',
+          label: 'Work',
+          value: 'Landscape designer',
+          valueType: 'text',
+          source: 'kindy',
+        },
+        {
+          id: 'detail-alex-interests',
+          definitionId: 'interests',
+          label: 'Interests',
+          value: 'Gardening, cooking',
+          valueType: 'text',
+          source: 'kindy',
+        },
+      ],
+      createdAt: now - 80_000,
+      updatedAt: now - 3_000,
+    },
+    {
+      id: 'demo-robin',
+      displayName: 'Robin Chen',
+      givenName: 'Robin',
+      familyName: 'Chen',
+      isFavorite: true,
+      isArchived: false,
+      isDeceased: false,
+      howWeMet: 'Friends',
+      contactPoints: [],
+      details: [],
+      createdAt: now - 70_000,
+      updatedAt: now - 2_000,
+    },
+    {
+      id: 'demo-sam',
+      displayName: 'Sam Taylor',
+      givenName: 'Sam',
+      familyName: 'Taylor',
+      isFavorite: false,
+      isArchived: false,
+      isDeceased: false,
+      contactPoints: [],
+      details: [],
+      createdAt: now - 60_000,
+      updatedAt: now - 1_000,
+    },
+  ],
+  circles: [
+    {
+      id: 'circle-family',
+      name: 'Family',
+      colorToken: 'family',
+      iconKey: 'home',
+      isArchived: false,
+    },
+    {
+      id: 'circle-neighbours',
+      name: 'Neighbours',
+      colorToken: 'team',
+      iconKey: 'users',
+      isArchived: false,
+    },
+    {
+      id: 'circle-board',
+      name: 'Board',
+      colorToken: 'work',
+      iconKey: 'briefcase',
+      isArchived: false,
+    },
+  ],
+  memberships: [
+    { circleId: 'circle-neighbours', personId: 'demo-alex', role: 'Garden group' },
+    { circleId: 'circle-family', personId: 'demo-robin' },
+    { circleId: 'circle-board', personId: 'demo-sam', role: 'Treasurer' },
+  ],
+  relationships: [
+    {
+      id: 'relationship-alex-robin',
+      fromPersonId: 'demo-alex',
+      toPersonId: 'demo-robin',
+      type: 'friend-of',
+    },
+  ],
+  notes: [
+    {
+      id: 'note-alex',
+      body: 'Moving in November. Ask how the house hunt is going.',
+      personIds: ['demo-alex'],
+      occurredAt: now - 86_400_000,
+      isPinned: true,
+      createdAt: now - 86_400_000,
+      updatedAt: now - 86_400_000,
+    },
+  ],
+  events: [
+    {
+      id: 'event-robin-birthday',
+      type: 'birthday',
+      title: "Robin's birthday",
+      date: { year: null, month: new Date(now + 86_400_000).getUTCMonth() + 1, day: new Date(now + 86_400_000).getUTCDate() },
+      personIds: ['demo-robin'],
+      source: 'kindy',
+    },
+  ],
+  reminders: [
+    {
+      id: 'reminder-alex',
+      personId: 'demo-alex',
+      title: 'Check in next week',
+      localDateTime: '2026-09-26T10:00:00',
+      timezone: 'Europe/Amsterdam',
+      recurrence: { kind: 'once' },
+      notificationOffsetsMinutes: [0],
+      isCancelled: false,
+    },
+  ],
+  reminderOccurrences: [
+    {
+      id: 'occurrence-alex',
+      reminderId: 'reminder-alex',
+      dueAt: now + 7 * 86_400_000,
+      state: 'scheduled',
+    },
+  ],
+  interactions: [],
+}
