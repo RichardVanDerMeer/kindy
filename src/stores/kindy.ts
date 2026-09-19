@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import type { KindyData, Person, UpcomingItem } from '@/domain/model'
+import type { ExternalContactsConnection, ExternalContactSnapshot } from '@/domain/ports'
 import { getKindyRepository } from '@/infrastructure/repositories/repository'
 
 const repository = getKindyRepository()
@@ -40,6 +41,13 @@ export const useKindyStore = defineStore('kindy', () => {
     upcoming.value = await repository.listUpcoming(Date.now(), 20)
   }
 
+  async function lock(): Promise<void> {
+    data.value = null
+    upcoming.value = []
+    initialized.value = false
+    await repository.close()
+  }
+
   async function savePerson(person: Person): Promise<void> {
     await repository.savePerson(person)
     await refresh()
@@ -71,6 +79,72 @@ export const useKindyStore = defineStore('kindy', () => {
     await savePerson(person)
   }
 
+  async function importExternalContacts(
+    connection: ExternalContactsConnection,
+    contacts: ExternalContactSnapshot[],
+  ): Promise<{ imported: number; skipped: number }> {
+    if (!data.value) throw new Error('Kindy is not initialized')
+    // Read a plain repository snapshot here. Pinia wraps `data` deeply in Vue
+    // proxies, which cannot be passed to structuredClone in the browser.
+    const next = await repository.getData()
+    let imported = 0
+    let skipped = 0
+
+    for (const contact of contacts) {
+      const existingIdentity = next.externalIdentities.find(
+        (identity) =>
+          identity.provider === connection.provider &&
+          identity.providerAccountId === connection.providerAccountId &&
+          identity.providerResourceId === contact.resourceName,
+      )
+      if (existingIdentity) {
+        existingIdentity.etag = contact.etag
+        existingIdentity.lastSyncedAt = Date.now()
+        skipped += 1
+        continue
+      }
+
+      const now = Date.now()
+      const personId = crypto.randomUUID()
+      next.people.push({
+        id: personId,
+        displayName: contact.displayName,
+        givenName: contact.givenName,
+        familyName: contact.familyName,
+        isFavorite: false,
+        isArchived: false,
+        isDeceased: false,
+        contactPoints: contact.contactPoints.map((point, index) => ({
+          id: crypto.randomUUID(),
+          kind: point.kind,
+          label: point.label,
+          value: point.value,
+          normalizedValue: point.value.trim().toLocaleLowerCase(),
+          isPrimary: index === 0,
+          source: 'google',
+          sourceFieldId: point.providerFieldId,
+        })),
+        details: [],
+        createdAt: now,
+        updatedAt: now,
+      })
+      next.externalIdentities.push({
+        id: crypto.randomUUID(),
+        personId,
+        provider: 'google',
+        providerAccountId: connection.providerAccountId,
+        providerResourceId: contact.resourceName,
+        etag: contact.etag,
+        lastSyncedAt: now,
+      })
+      imported += 1
+    }
+
+    await repository.replaceData(next)
+    await refresh()
+    return { imported, skipped }
+  }
+
   async function search(query: string): Promise<Person[]> {
     return repository.search(query)
   }
@@ -94,9 +168,11 @@ export const useKindyStore = defineStore('kindy', () => {
     upcoming,
     initialize,
     refresh,
+    lock,
     savePerson,
     addPerson,
     toggleFavorite,
+    importExternalContacts,
     search,
     circleMemberships,
   }

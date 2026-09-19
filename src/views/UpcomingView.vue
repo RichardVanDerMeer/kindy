@@ -19,8 +19,12 @@ function peopleFor(ids: string[]) {
     <div v-if="store.upcoming.length" class="timeline-list">
       <article v-for="item in store.upcoming" :key="item.id" class="card upcoming-card">
         <div class="upcoming-date">
-          <strong>{{ new Intl.DateTimeFormat(undefined, { day: 'numeric' }).format(item.dueAt) }}</strong>
-          <span>{{ new Intl.DateTimeFormat(undefined, { month: 'short' }).format(item.dueAt) }}</span>
+          <strong>{{
+            new Intl.DateTimeFormat(undefined, { day: 'numeric' }).format(item.dueAt)
+          }}</strong>
+          <span>{{
+            new Intl.DateTimeFormat(undefined, { month: 'short' }).format(item.dueAt)
+          }}</span>
         </div>
         <div class="avatar-stack" v-if="item.personIds.length">
           <PersonAvatar
@@ -38,6 +42,8 @@ function peopleFor(ids: string[]) {
         </div>
       </article>
     </div>
-    <div v-else class="empty-state card"><h2>{{ $t('upcoming.empty') }}</h2></div>
+    <div v-else class="empty-state card">
+      <h2>{{ $t('upcoming.empty') }}</h2>
+    </div>
   </section>
 </template>

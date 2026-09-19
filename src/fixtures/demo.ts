@@ -58,6 +58,7 @@ export const demoData: KindyData = {
       howWeMet: 'Vrienden sinds de middelbare school',
     }),
   ],
+  externalIdentities: [],
   circles: [
     {
       id: 'circle-family',

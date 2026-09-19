@@ -102,9 +102,7 @@ export default defineConfig({
      * Use the preview server on CI for more realistic testing.
      * Playwright will re-use the local server if there is already a dev-server running.
      */
-    command: process.env.CI
-      ? 'pnpm preview --host 127.0.0.1'
-      : 'pnpm dev --host 127.0.0.1',
+    command: process.env.CI ? 'pnpm preview --host 127.0.0.1' : 'pnpm dev --host 127.0.0.1',
     url: process.env.CI ? 'http://127.0.0.1:4173' : 'http://127.0.0.1:5173',
     reuseExistingServer: !process.env.CI,
   },

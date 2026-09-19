@@ -10,6 +10,7 @@ import {
   inverseRelationship,
   relationshipTypeForPerson,
 } from '@/domain/relationships'
+import { mapGooglePerson } from '@/infrastructure/contacts/googleContactsGateway'
 
 function person(overrides: Partial<Person>): Person {
   return {
@@ -70,10 +71,7 @@ describe('partial dates', () => {
   })
 
   it('rolls an annual date into the next year', () => {
-    const next = nextPartialDate(
-      { year: null, month: 1, day: 5 },
-      new Date('2026-09-19T12:00:00Z'),
-    )
+    const next = nextPartialDate({ year: null, month: 1, day: 5 }, new Date('2026-09-19T12:00:00Z'))
     expect(next.toISOString()).toBe('2027-01-05T09:00:00.000Z')
   })
 })
@@ -121,5 +119,39 @@ describe('reminder recurrence', () => {
       Date.parse('2026-03-28T10:00:00Z'),
     )
     expect(new Date(result ?? 0).toISOString()).toBe('2026-03-29T07:00:00.000Z')
+  })
+})
+
+describe('Google Contacts mapping', () => {
+  it('maps only the requested remote fields into an import snapshot', () => {
+    const snapshot = mapGooglePerson({
+      resourceName: 'people/c123',
+      etag: 'etag-1',
+      names: [{ displayName: 'Ada Lovelace', givenName: 'Ada', familyName: 'Lovelace' }],
+      emailAddresses: [
+        {
+          value: 'ada@example.test',
+          type: 'work',
+          metadata: { source: { id: 'email-field-1' } },
+        },
+      ],
+    })
+
+    expect(snapshot).toMatchObject({
+      resourceName: 'people/c123',
+      etag: 'etag-1',
+      displayName: 'Ada Lovelace',
+      contactPoints: [
+        {
+          providerFieldId: 'email-field-1',
+          kind: 'email',
+          value: 'ada@example.test',
+        },
+      ],
+    })
+  })
+
+  it('ignores Google resources without a usable name', () => {
+    expect(mapGooglePerson({ resourceName: 'people/empty', names: [] })).toBeNull()
   })
 })

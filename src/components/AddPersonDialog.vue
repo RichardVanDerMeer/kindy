@@ -4,6 +4,7 @@ import { nextTick, ref, watch } from 'vue'
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{
   close: []
+  google: []
   save: [input: { displayName: string; howWeMet?: string }]
 }>()
 
@@ -34,6 +35,16 @@ function submit(): void {
       <form class="dialog" role="dialog" aria-modal="true" @submit.prevent="submit">
         <div class="dialog__handle" aria-hidden="true"></div>
         <h2>{{ $t('people.add') }}</h2>
+        <button type="button" class="google-import-option" @click="$emit('google')">
+          <span class="google-mark">G</span>
+          <span>
+            <strong>{{ $t('google.importFromGoogle') }}</strong>
+            <small>{{ $t('google.importHint') }}</small>
+          </span>
+        </button>
+        <div class="dialog-divider">
+          <span>{{ $t('google.orManual') }}</span>
+        </div>
         <label class="field">
           <span>{{ $t('people.name') }}</span>
           <input ref="nameInput" v-model="displayName" required autocomplete="name" />

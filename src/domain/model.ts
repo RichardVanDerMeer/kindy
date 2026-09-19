@@ -42,6 +42,17 @@ export interface Person {
   deletedAt?: number
 }
 
+export interface ExternalIdentity {
+  id: EntityId
+  personId: EntityId
+  provider: 'google'
+  providerAccountId: string
+  providerResourceId: string
+  etag?: string
+  lastSyncedAt?: number
+  remoteDeletedAt?: number
+}
+
 export interface Circle {
   id: EntityId
   name: string
@@ -151,6 +162,7 @@ export interface Interaction {
 export interface KindyData {
   schemaVersion: number
   people: Person[]
+  externalIdentities: ExternalIdentity[]
   circles: Circle[]
   memberships: CircleMembership[]
   relationships: Relationship[]

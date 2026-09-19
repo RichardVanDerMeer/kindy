@@ -35,10 +35,14 @@ watch(query, async (value) => {
         @click="router.push(`/people/${person.id}`)"
       >
         <PersonAvatar :name="person.displayName" :tone="index" />
-        <span class="person-row__copy"><strong>{{ person.displayName }}</strong></span>
+        <span class="person-row__copy"
+          ><strong>{{ person.displayName }}</strong></span
+        >
         <ChevronRight :size="21" />
       </button>
     </div>
-    <div v-else-if="query" class="empty-state card"><h2>{{ $t('search.noResults') }}</h2></div>
+    <div v-else-if="query" class="empty-state card">
+      <h2>{{ $t('search.noResults') }}</h2>
+    </div>
   </section>
 </template>

@@ -4,6 +4,7 @@ import CirclesView from '@/views/CirclesView.vue'
 import PeopleView from '@/views/PeopleView.vue'
 import PersonView from '@/views/PersonView.vue'
 import SearchView from '@/views/SearchView.vue'
+import SettingsView from '@/views/SettingsView.vue'
 import UpcomingView from '@/views/UpcomingView.vue'
 
 const router = createRouter({
@@ -20,6 +21,12 @@ const router = createRouter({
     { path: '/circles', name: 'circles', component: CirclesView },
     { path: '/upcoming', name: 'upcoming', component: UpcomingView },
     { path: '/search', name: 'search', component: SearchView },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: SettingsView,
+      meta: { showNavigation: false },
+    },
   ],
 })
 

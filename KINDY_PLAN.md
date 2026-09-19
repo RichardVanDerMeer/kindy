@@ -246,12 +246,12 @@ Use a join table between notes and people so one note can concern multiple peopl
 Store one canonical relationship and derive its inverse for display. Examples:
 
 | Stored direction | Derived inverse |
-| --- | --- |
-| parent of | child of |
-| child of | parent of |
-| partner of | partner of |
-| sibling of | sibling of |
-| introduced by | introduced |
+| ---------------- | --------------- |
+| parent of        | child of        |
+| child of         | parent of       |
+| partner of       | partner of      |
+| sibling of       | sibling of      |
+| introduced by    | introduced      |
 
 Prevent self-relations and duplicate active relations.
 
@@ -908,4 +908,3 @@ The beta is successful when a user can:
 11. Export data and restore it into a clean installation.
 
 The app should remain useful when offline, when Google access is revoked and when notification permission is denied.
-

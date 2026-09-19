@@ -52,6 +52,7 @@ dependencies {
     implementation "androidx.glance:glance-appwidget:1.2.0"
     implementation "androidx.glance:glance-material3:1.2.0"
     implementation "androidx.work:work-runtime-ktx:2.11.0"
+    implementation "com.google.android.gms:play-services-auth:22.0.0"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
@@ -59,6 +60,15 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
+
+// Capacitor regenerates its build fragment during sync. Keep Kindy's bytecode
+// target pinned here so Java and Kotlin stay aligned on the supported baseline.
+android {
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
 
 try {
     def servicesJSON = file('google-services.json')

@@ -46,6 +46,8 @@ function icon(iconKey: string) {
         </div>
       </article>
     </div>
-    <div v-else class="empty-state card"><h2>{{ $t('circles.empty') }}</h2></div>
+    <div v-else class="empty-state card">
+      <h2>{{ $t('circles.empty') }}</h2>
+    </div>
   </section>
 </template>

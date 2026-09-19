@@ -26,5 +26,5 @@
   --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
-  --font-body: Inter, ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif;
+  --font-body: Inter, ui-rounded, 'SF Pro Rounded', 'Segoe UI', system-ui, sans-serif;
 }

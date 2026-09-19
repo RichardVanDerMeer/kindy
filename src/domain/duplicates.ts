@@ -35,7 +35,11 @@ export function scoreDuplicate(left: Person, right: Person): DuplicateScore {
     reasons.push('same-name')
   }
 
-  if (left.nickname && right.nickname && normalizeText(left.nickname) === normalizeText(right.nickname)) {
+  if (
+    left.nickname &&
+    right.nickname &&
+    normalizeText(left.nickname) === normalizeText(right.nickname)
+  ) {
     score += 15
     reasons.push('same-nickname')
   }

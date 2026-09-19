@@ -43,7 +43,8 @@ export interface InteractionRepository {
 }
 
 export interface KindyRepository
-  extends PersonRepository,
+  extends
+    PersonRepository,
     CircleRepository,
     RelationshipRepository,
     NoteRepository,
@@ -51,6 +52,7 @@ export interface KindyRepository
     ReminderRepository,
     InteractionRepository {
   initialize(): Promise<void>
+  close(): Promise<void>
   getData(): Promise<KindyData>
   replaceData(data: KindyData): Promise<void>
   listUpcoming(now: number, limit?: number): Promise<UpcomingItem[]>
@@ -58,15 +60,53 @@ export interface KindyRepository
 }
 
 export interface ExternalContactsGateway {
-  authorize(): Promise<void>
-  disconnect(): Promise<void>
-  isConnected(): Promise<boolean>
+  getConnection(): Promise<ExternalContactsConnection | null>
+  authorize(): Promise<ExternalContactsConnection>
+  listCandidates(pageToken?: string): Promise<ExternalContactsPage>
+  fetchChanges(syncToken: string): Promise<ExternalContactsChangeSet>
+  revoke(): Promise<void>
+}
+
+export interface ExternalContactsConnection {
+  provider: 'google'
+  providerAccountId: string
+  displayName?: string
+}
+
+export interface ExternalContactSnapshot {
+  resourceName: string
+  etag: string
+  displayName: string
+  givenName?: string
+  familyName?: string
+  photoUrl?: string
+  contactPoints: Array<{
+    providerFieldId: string
+    kind: 'phone' | 'email' | 'address' | 'url'
+    label: string
+    value: string
+  }>
+}
+
+export interface ExternalContactsPage {
+  contacts: ExternalContactSnapshot[]
+  nextPageToken?: string
+  nextSyncToken?: string
+}
+
+export interface ExternalContactsChangeSet {
+  contacts: ExternalContactSnapshot[]
+  deletedResourceNames: string[]
+  nextSyncToken: string
+  requiresFullRefresh: boolean
 }
 
 export interface SecurityGateway {
+  availability(): Promise<boolean>
   isAppLockEnabled(): Promise<boolean>
+  setAppLockEnabled(enabled: boolean): Promise<void>
   authenticate(): Promise<boolean>
-  closeProtectedResources(): Promise<void>
+  getDatabasePassphrase(): Promise<string>
 }
 
 export interface NotificationScheduler {

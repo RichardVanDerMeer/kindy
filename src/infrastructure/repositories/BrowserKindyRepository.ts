@@ -10,6 +10,7 @@ function emptyData(): KindyData {
   return {
     schemaVersion: 1,
     people: [],
+    externalIdentities: [],
     circles: [],
     memberships: [],
     relationships: [],
@@ -32,11 +33,16 @@ export class BrowserKindyRepository implements KindyRepository {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
       this.data = JSON.parse(stored) as KindyData
+      this.data.externalIdentities ??= []
       return
     }
 
     this.data = import.meta.env.DEV ? clone(demoData) : emptyData()
     await this.persist()
+  }
+
+  async close(): Promise<void> {
+    // The browser adapter contains synthetic preview data only.
   }
 
   async getData(): Promise<KindyData> {
