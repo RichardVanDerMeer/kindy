@@ -1,16 +1,10 @@
 import { nextPartialDate } from '@/domain/dates'
 import { normalizeText } from '@/domain/duplicates'
-import type {
-  ImportantEvent,
-  KindyData,
-  Person,
-  Reminder,
-  UpcomingItem,
-} from '@/domain/model'
+import type { ImportantEvent, KindyData, Person, Reminder, UpcomingItem } from '@/domain/model'
 import type { KindyRepository } from '@/domain/ports'
 import { demoData } from '@/fixtures/demo'
 
-const STORAGE_KEY = 'kindy.local-data.v1'
+const STORAGE_KEY = 'kindy.local-data.v3'
 
 function emptyData(): KindyData {
   return {
@@ -54,7 +48,9 @@ export class BrowserKindyRepository implements KindyRepository {
     await this.persist()
   }
 
-  async listPeople(options: { includeArchived?: boolean; includeDeleted?: boolean } = {}): Promise<Person[]> {
+  async listPeople(
+    options: { includeArchived?: boolean; includeDeleted?: boolean } = {},
+  ): Promise<Person[]> {
     return clone(
       this.data.people
         .filter((person) => options.includeArchived || !person.isArchived)
@@ -166,7 +162,9 @@ export class BrowserKindyRepository implements KindyRepository {
       this.data.memberships
         .filter((membership) => {
           const circle = this.data.circles.find((candidate) => candidate.id === membership.circleId)
-          return normalizeText(`${circle?.name ?? ''} ${membership.role ?? ''}`).includes(normalizedQuery)
+          return normalizeText(`${circle?.name ?? ''} ${membership.role ?? ''}`).includes(
+            normalizedQuery,
+          )
         })
         .map((membership) => membership.personId),
     )
@@ -188,7 +186,10 @@ export class BrowserKindyRepository implements KindyRepository {
             .filter(Boolean)
             .join(' '),
         )
-        return !person.deletedAt && (haystack.includes(normalizedQuery) || circlePersonIds.has(person.id))
+        return (
+          !person.deletedAt &&
+          (haystack.includes(normalizedQuery) || circlePersonIds.has(person.id))
+        )
       }),
     )
   }

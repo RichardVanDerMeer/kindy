@@ -1,10 +1,19 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ArrowLeft, Bell, BriefcaseBusiness, ChevronRight, Heart, NotebookPen, Star } from '@lucide/vue'
+import {
+  ArrowLeft,
+  Bell,
+  BriefcaseBusiness,
+  ChevronRight,
+  Heart,
+  NotebookPen,
+  Star,
+} from '@lucide/vue'
 import { useRouter } from 'vue-router'
 
 import PersonAvatar from '@/components/PersonAvatar.vue'
-import { inverseRelationship } from '@/domain/relationships'
+import RelationshipDiagram from '@/components/RelationshipDiagram.vue'
+import { connectedPersonId, relationshipTypeForPerson } from '@/domain/relationships'
 import { useKindyStore } from '@/stores/kindy'
 
 const props = defineProps<{ id: string }>()
@@ -25,11 +34,10 @@ const relationships = computed(() =>
         relationship.fromPersonId === props.id || relationship.toPersonId === props.id,
     )
     .map((relationship) => {
-      const isFrom = relationship.fromPersonId === props.id
-      const connectedId = isFrom ? relationship.toPersonId : relationship.fromPersonId
+      const connectedId = connectedPersonId(relationship, props.id)
       return {
         ...relationship,
-        displayType: isFrom ? relationship.type : inverseRelationship(relationship.type),
+        displayType: relationshipTypeForPerson(relationship, props.id),
         person: store.data?.people.find((candidate) => candidate.id === connectedId),
       }
     }),
@@ -75,7 +83,7 @@ const circles = computed(() => store.circleMemberships(props.id))
 
     <nav class="profile-tabs" aria-label="Profile sections">
       <button
-        v-for="tab in (['overview', 'notes', 'connections', 'timeline'] as const)"
+        v-for="tab in ['overview', 'notes', 'connections', 'timeline'] as const"
         :key="tab"
         :class="{ active: activeTab === tab }"
         @click="activeTab = tab"
@@ -122,31 +130,40 @@ const circles = computed(() => store.circleMemberships(props.id))
       <article v-if="notes[0]" class="card note-card">
         <div class="card-heading-row">
           <h2>{{ $t('profile.latestNote') }}</h2>
-          <time>{{ new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(notes[0].occurredAt) }}</time>
+          <time>{{
+            new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(notes[0].occurredAt)
+          }}</time>
         </div>
         <p>{{ notes[0].body }}</p>
       </article>
 
       <button class="reminder-callout">
         <Bell :size="20" />
-        <span>{{ store.data?.reminders.find((reminder) => reminder.personId === person?.id)?.title ?? $t('upcoming.reminder') }}</span>
+        <span>{{
+          store.data?.reminders.find((reminder) => reminder.personId === person?.id)?.title ??
+          $t('upcoming.reminder')
+        }}</span>
         <ChevronRight :size="19" />
       </button>
     </div>
 
     <div v-else-if="activeTab === 'notes'" class="profile-content">
       <article v-for="note in notes" :key="note.id" class="card note-card">
-        <time>{{ new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(note.occurredAt) }}</time>
+        <time>{{
+          new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(note.occurredAt)
+        }}</time>
         <p>{{ note.body }}</p>
       </article>
       <p v-if="!notes.length" class="empty-copy">{{ $t('profile.noNotes') }}</p>
     </div>
 
     <div v-else-if="activeTab === 'connections'" class="profile-content">
-      <article v-for="relationship in relationships" :key="relationship.id" class="card">
-        <strong>{{ relationship.person?.displayName }}</strong>
-        <p>{{ relationship.customLabel || relationship.displayType }}</p>
-      </article>
+      <RelationshipDiagram
+        v-if="relationships.length"
+        :person="person"
+        :relationships="relationships"
+        @select="router.push(`/people/${$event}`)"
+      />
       <p v-if="!relationships.length" class="empty-copy">{{ $t('profile.noConnections') }}</p>
     </div>
 
@@ -162,6 +179,8 @@ const circles = computed(() => store.circleMemberships(props.id))
   </section>
   <section v-else class="center-state">
     <p>{{ $t('search.noResults') }}</p>
-    <button class="button button--primary" @click="router.push('/')">{{ $t('common.back') }}</button>
+    <button class="button button--primary" @click="router.push('/')">
+      {{ $t('common.back') }}
+    </button>
   </section>
 </template>

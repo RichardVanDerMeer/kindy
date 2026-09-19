@@ -4,7 +4,12 @@ import { isValidPartialDate, nextPartialDate } from '@/domain/dates'
 import { scoreDuplicate } from '@/domain/duplicates'
 import type { Person } from '@/domain/model'
 import { nextOccurrence } from '@/domain/reminders'
-import { assertRelationshipParticipants, inverseRelationship } from '@/domain/relationships'
+import {
+  assertRelationshipParticipants,
+  connectedPersonId,
+  inverseRelationship,
+  relationshipTypeForPerson,
+} from '@/domain/relationships'
 
 function person(overrides: Partial<Person>): Person {
   return {
@@ -30,6 +35,31 @@ describe('relationships', () => {
 
   it('rejects self relationships', () => {
     expect(() => assertRelationshipParticipants('same', 'same')).toThrow(/themselves/)
+  })
+
+  it('shows one canonical parent relation correctly from both profiles', () => {
+    const relationship = {
+      id: 'parent-child',
+      fromPersonId: 'richard',
+      toPersonId: 'emma',
+      type: 'parent-of' as const,
+    }
+
+    expect(relationshipTypeForPerson(relationship, 'richard')).toBe('parent-of')
+    expect(relationshipTypeForPerson(relationship, 'emma')).toBe('child-of')
+    expect(connectedPersonId(relationship, 'emma')).toBe('richard')
+  })
+
+  it('keeps friendships symmetric', () => {
+    const relationship = {
+      id: 'friends',
+      fromPersonId: 'richard',
+      toPersonId: 'robin',
+      type: 'friend-of' as const,
+    }
+
+    expect(relationshipTypeForPerson(relationship, 'richard')).toBe('friend-of')
+    expect(relationshipTypeForPerson(relationship, 'robin')).toBe('friend-of')
   })
 })
 
