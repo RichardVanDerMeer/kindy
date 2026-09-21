@@ -21,7 +21,7 @@ function person(id: string, displayName: string, options: Partial<Person> = {}):
 }
 
 export const demoData: KindyData = {
-  schemaVersion: 1,
+  schemaVersion: 3,
   people: [
     person('demo-richard', 'Richard van der Meer', {
       isFavorite: true,
@@ -51,7 +51,13 @@ export const demoData: KindyData = {
     }),
     person('demo-emma', 'Emma van der Meer', { howWeMet: 'Dochter' }),
     person('demo-lucas', 'Lucas van der Meer', { howWeMet: 'Zoon' }),
-    person('demo-henk', 'Henk van der Meer', { howWeMet: 'Vader' }),
+    person('demo-henk', 'Henk van der Meer', {
+      howWeMet: 'Vader',
+      isDeceased: true,
+      birthDate: { year: 1948, month: 2, day: 3 },
+      deathDate: { year: 2024, month: 5, day: 14 },
+      memorialNote: 'Geliefde vader en opa. Altijd in voor een goed verhaal.',
+    }),
     person('demo-els', 'Els van der Meer', { howWeMet: 'Moeder' }),
     person('demo-robin', 'Robin Chen', {
       isFavorite: true,
@@ -96,42 +102,48 @@ export const demoData: KindyData = {
       fromPersonId: 'demo-richard',
       toPersonId: 'demo-sophie',
       type: 'partner-of',
-      customLabel: 'Echtgenote',
+      fromPersonLabel: 'Echtgenote',
+      toPersonLabel: 'Echtgenoot',
     },
     {
       id: 'relationship-richard-emma',
       fromPersonId: 'demo-richard',
       toPersonId: 'demo-emma',
       type: 'parent-of',
-      customLabel: 'Dochter',
+      fromPersonLabel: 'Dochter',
+      toPersonLabel: 'Vader',
     },
     {
       id: 'relationship-richard-lucas',
       fromPersonId: 'demo-richard',
       toPersonId: 'demo-lucas',
       type: 'parent-of',
-      customLabel: 'Zoon',
+      fromPersonLabel: 'Zoon',
+      toPersonLabel: 'Vader',
     },
     {
       id: 'relationship-henk-richard',
       fromPersonId: 'demo-henk',
       toPersonId: 'demo-richard',
       type: 'parent-of',
-      customLabel: 'Vader',
+      fromPersonLabel: 'Zoon',
+      toPersonLabel: 'Vader',
     },
     {
       id: 'relationship-els-richard',
       fromPersonId: 'demo-els',
       toPersonId: 'demo-richard',
       type: 'parent-of',
-      customLabel: 'Moeder',
+      fromPersonLabel: 'Zoon',
+      toPersonLabel: 'Moeder',
     },
     {
       id: 'relationship-richard-robin',
       fromPersonId: 'demo-richard',
       toPersonId: 'demo-robin',
       type: 'friend-of',
-      customLabel: 'Goede vriend',
+      fromPersonLabel: 'Goede vriend',
+      toPersonLabel: 'Goede vriend',
     },
   ],
   notes: [

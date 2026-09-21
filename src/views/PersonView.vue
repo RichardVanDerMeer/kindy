@@ -1,25 +1,38 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
   ArrowLeft,
   Bell,
   BriefcaseBusiness,
+  CalendarDays,
   ChevronRight,
   Heart,
   NotebookPen,
+  Sparkles,
   Star,
 } from '@lucide/vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
 import PersonAvatar from '@/components/PersonAvatar.vue'
 import RelationshipDiagram from '@/components/RelationshipDiagram.vue'
+import { ageBetween, formatPartialDate } from '@/domain/dates'
+import type { Person } from '@/domain/model'
 import { connectedPersonId, relationshipTypeForPerson } from '@/domain/relationships'
 import { useKindyStore } from '@/stores/kindy'
 
 const props = defineProps<{ id: string }>()
 const store = useKindyStore()
 const router = useRouter()
+const { locale } = useI18n()
 const activeTab = ref<'overview' | 'notes' | 'connections' | 'timeline'>('overview')
+
+watch(
+  () => props.id,
+  () => {
+    activeTab.value = 'overview'
+  },
+)
 
 const person = computed(() => store.data?.people.find((candidate) => candidate.id === props.id))
 const notes = computed(() =>
@@ -38,6 +51,10 @@ const relationships = computed(() =>
       return {
         ...relationship,
         displayType: relationshipTypeForPerson(relationship, props.id),
+        displayLabel:
+          (relationship.fromPersonId === props.id
+            ? relationship.fromPersonLabel
+            : relationship.toPersonLabel) ?? relationship.customLabel,
         person: store.data?.people.find((candidate) => candidate.id === connectedId),
       }
     }),
@@ -48,6 +65,14 @@ const interactions = computed(() =>
     .sort((left, right) => right.occurredAt - left.occurredAt),
 )
 const circles = computed(() => store.circleMemberships(props.id))
+const ageAtDeath = computed(() => {
+  if (!person.value?.birthDate || !person.value.deathDate) return null
+  return ageBetween(person.value.birthDate, person.value.deathDate)
+})
+
+function formatDate(date: NonNullable<Person['birthDate']>): string {
+  return formatPartialDate(date, locale.value)
+}
 </script>
 
 <template>
@@ -59,7 +84,12 @@ const circles = computed(() => store.circleMemberships(props.id))
     </header>
 
     <div class="profile-hero">
-      <PersonAvatar :name="person.displayName" :photo-ref="person.photoRef" size="large" />
+      <PersonAvatar
+        :name="person.displayName"
+        :photo-ref="person.photoRef"
+        :deceased="person.isDeceased"
+        size="large"
+      />
       <div class="profile-hero__copy">
         <div class="profile-name-row">
           <h1>{{ person.displayName }}</h1>
@@ -67,7 +97,15 @@ const circles = computed(() => store.circleMemberships(props.id))
             <Star :size="25" :fill="person.isFavorite ? 'currentColor' : 'none'" />
           </button>
         </div>
-        <p>{{ person.howWeMet }}</p>
+        <div v-if="person.isDeceased" class="memorial-status">
+          <Sparkles :size="15" />
+          <span>{{ $t('memorial.inMemory') }}</span>
+          <template v-if="person.deathDate">
+            <span aria-hidden="true">·</span>
+            <span>{{ formatDate(person.deathDate) }}</span>
+          </template>
+        </div>
+        <p v-else>{{ person.howWeMet }}</p>
         <div class="filter-row">
           <span
             v-for="membership in circles"
@@ -93,6 +131,35 @@ const circles = computed(() => store.circleMemberships(props.id))
     </nav>
 
     <div v-if="activeTab === 'overview'" class="profile-content">
+      <article v-if="person.isDeceased" class="card memorial-card">
+        <div class="memorial-card__heading">
+          <span class="memorial-card__icon"><Sparkles :size="20" /></span>
+          <span>
+            <h2>
+              {{ $t('memorial.remembering', { name: person.givenName || person.displayName }) }}
+            </h2>
+            <p v-if="person.memorialNote">{{ person.memorialNote }}</p>
+          </span>
+        </div>
+        <div class="memorial-dates">
+          <div v-if="person.birthDate">
+            <CalendarDays :size="19" />
+            <span>{{ $t('memorial.born') }}</span>
+            <strong>{{ formatDate(person.birthDate) }}</strong>
+          </div>
+          <div v-if="person.deathDate">
+            <CalendarDays :size="19" />
+            <span>{{ $t('memorial.died') }}</span>
+            <strong>{{ formatDate(person.deathDate) }}</strong>
+          </div>
+          <div v-if="ageAtDeath !== null">
+            <Heart :size="19" />
+            <span>{{ $t('memorial.age') }}</span>
+            <strong>{{ $t('memorial.years', { count: ageAtDeath }) }}</strong>
+          </div>
+        </div>
+      </article>
+
       <article class="card profile-card">
         <h2>{{ $t('profile.details') }}</h2>
         <p v-if="!person.details.length" class="muted">{{ $t('profile.noDetails') }}</p>
@@ -118,10 +185,11 @@ const circles = computed(() => store.circleMemberships(props.id))
             :name="relationship.person.displayName"
             size="small"
             :tone="index + 1"
+            :deceased="relationship.person.isDeceased"
           />
           <span>
             <strong>{{ relationship.person?.displayName }}</strong>
-            <small>{{ relationship.customLabel || relationship.displayType }}</small>
+            <small>{{ relationship.displayLabel || relationship.displayType }}</small>
           </span>
           <ChevronRight :size="19" />
         </button>
@@ -137,7 +205,7 @@ const circles = computed(() => store.circleMemberships(props.id))
         <p>{{ notes[0].body }}</p>
       </article>
 
-      <button class="reminder-callout">
+      <button v-if="!person.isDeceased" class="reminder-callout">
         <Bell :size="20" />
         <span>{{
           store.data?.reminders.find((reminder) => reminder.personId === person?.id)?.title ??

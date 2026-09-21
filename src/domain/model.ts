@@ -34,6 +34,9 @@ export interface Person {
   isFavorite: boolean
   isArchived: boolean
   isDeceased: boolean
+  birthDate?: PartialDate
+  deathDate?: PartialDate
+  memorialNote?: string
   howWeMet?: string
   contactPoints: ContactPoint[]
   details: PersonDetail[]
@@ -87,6 +90,8 @@ export interface Relationship {
   toPersonId: EntityId
   type: RelationshipType
   customLabel?: string
+  fromPersonLabel?: string
+  toPersonLabel?: string
   startedOn?: string
   endedOn?: string
   note?: string

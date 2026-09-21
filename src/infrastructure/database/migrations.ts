@@ -1,7 +1,7 @@
 import type { capSQLiteVersionUpgrade } from '@capacitor-community/sqlite'
 
 export const DATABASE_NAME = 'kindy'
-export const DATABASE_VERSION = 1
+export const DATABASE_VERSION = 3
 
 const migrationOne = `
 PRAGMA foreign_keys = ON;
@@ -203,9 +203,32 @@ CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
 );
 `
 
+const migrationTwo = `
+ALTER TABLE people ADD COLUMN birth_year INTEGER;
+ALTER TABLE people ADD COLUMN birth_month INTEGER CHECK(birth_month BETWEEN 1 AND 12);
+ALTER TABLE people ADD COLUMN birth_day INTEGER CHECK(birth_day BETWEEN 1 AND 31);
+ALTER TABLE people ADD COLUMN death_year INTEGER;
+ALTER TABLE people ADD COLUMN death_month INTEGER CHECK(death_month BETWEEN 1 AND 12);
+ALTER TABLE people ADD COLUMN death_day INTEGER CHECK(death_day BETWEEN 1 AND 31);
+ALTER TABLE people ADD COLUMN memorial_note TEXT;
+`
+
+const migrationThree = `
+ALTER TABLE relationships ADD COLUMN from_person_label TEXT;
+ALTER TABLE relationships ADD COLUMN to_person_label TEXT;
+`
+
 export const migrations: capSQLiteVersionUpgrade[] = [
   {
     toVersion: 1,
     statements: [migrationOne],
+  },
+  {
+    toVersion: 2,
+    statements: [migrationTwo],
+  },
+  {
+    toVersion: 3,
+    statements: [migrationThree],
   },
 ]

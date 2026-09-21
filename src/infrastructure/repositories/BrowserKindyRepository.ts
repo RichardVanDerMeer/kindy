@@ -8,7 +8,7 @@ const STORAGE_KEY = 'kindy.local-data.v3'
 
 function emptyData(): KindyData {
   return {
-    schemaVersion: 1,
+    schemaVersion: 3,
     people: [],
     externalIdentities: [],
     circles: [],
@@ -34,6 +34,29 @@ export class BrowserKindyRepository implements KindyRepository {
     if (stored) {
       this.data = JSON.parse(stored) as KindyData
       this.data.externalIdentities ??= []
+      if (import.meta.env.DEV && this.data.schemaVersion < 2) {
+        const henk = this.data.people.find((person) => person.id === 'demo-henk')
+        if (henk) {
+          henk.isDeceased = true
+          henk.birthDate = { year: 1948, month: 2, day: 3 }
+          henk.deathDate = { year: 2024, month: 5, day: 14 }
+          henk.memorialNote = 'Geliefde vader en opa. Altijd in voor een goed verhaal.'
+        }
+        this.data.schemaVersion = 2
+      }
+      if (import.meta.env.DEV && this.data.schemaVersion < 3) {
+        const fixtureRelationships = new Map(
+          demoData.relationships.map((relationship) => [relationship.id, relationship]),
+        )
+        for (const relationship of this.data.relationships) {
+          const fixture = fixtureRelationships.get(relationship.id)
+          if (!fixture) continue
+          relationship.fromPersonLabel = fixture.fromPersonLabel
+          relationship.toPersonLabel = fixture.toPersonLabel
+        }
+        this.data.schemaVersion = 3
+      }
+      await this.persist()
       return
     }
 

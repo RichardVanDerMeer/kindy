@@ -7,6 +7,7 @@ const props = withDefaults(
     photoRef?: string
     size?: 'small' | 'medium' | 'large'
     tone?: number
+    deceased?: boolean
   }>(),
   { size: 'medium', tone: 0 },
 )
@@ -21,7 +22,11 @@ const initials = computed(() =>
 </script>
 
 <template>
-  <span class="avatar" :class="[`avatar--${size}`, `avatar--tone-${tone % 4}`]" :aria-label="name">
+  <span
+    class="avatar"
+    :class="[`avatar--${size}`, `avatar--tone-${tone % 4}`, { 'avatar--deceased': deceased }]"
+    :aria-label="name"
+  >
     <img v-if="photoRef" :src="photoRef" alt="" />
     <span v-else aria-hidden="true">{{ initials }}</span>
   </span>

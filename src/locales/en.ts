@@ -42,6 +42,15 @@ export default {
     friendsHint: 'Personal connections outside the family.',
     other: 'Other connections',
   },
+  memorial: {
+    inMemory: 'In memory',
+    listSubtitle: 'In memory · died {date}',
+    remembering: 'Remembering {name}',
+    born: 'Born',
+    died: 'Died',
+    age: 'Age',
+    years: '{count} years',
+  },
   circles: {
     title: 'Your circles',
     members: '{count} members',

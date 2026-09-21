@@ -391,6 +391,21 @@ h2 {
   background: linear-gradient(135deg, #ffe3d7, #d6e7ff);
 }
 
+.avatar--deceased {
+  border-color: rgba(255, 255, 255, 0.95);
+  background: linear-gradient(135deg, #e8e3ed, #cfc8db);
+  box-shadow: 0 0 0 2px rgba(102, 85, 126, 0.32);
+  filter: saturate(0.48);
+}
+
+.person-row--deceased {
+  background: linear-gradient(90deg, rgba(238, 232, 244, 0.28), transparent 72%);
+}
+
+.person-row--deceased .person-row__copy span {
+  color: #766780;
+}
+
 .card {
   border: 1px solid rgba(255, 255, 255, 0.85);
   border-radius: var(--radius-medium);
@@ -811,6 +826,17 @@ h2 {
   margin: 4px 0 0;
 }
 
+.memorial-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+  color: #6f5a7c;
+  font-size: 0.87rem;
+  font-weight: 700;
+}
+
 .profile-name-row {
   display: flex;
   align-items: center;
@@ -843,6 +869,67 @@ h2 {
 .profile-content {
   display: grid;
   gap: var(--space-3);
+}
+
+.memorial-card {
+  padding: var(--space-4);
+  background:
+    radial-gradient(circle at 100% 0, rgba(222, 208, 239, 0.62), transparent 44%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(244, 239, 248, 0.9));
+}
+
+.memorial-card__heading {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.memorial-card__heading h2,
+.memorial-card__heading p {
+  margin: 0;
+}
+
+.memorial-card__heading p {
+  margin-top: 5px;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+
+.memorial-card__icon {
+  display: inline-flex;
+  width: 39px;
+  height: 39px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: rgba(229, 218, 241, 0.88);
+  color: #684c7a;
+}
+
+.memorial-dates {
+  display: grid;
+  gap: 0;
+  margin-top: var(--space-3);
+  border-top: 1px solid rgba(105, 83, 120, 0.13);
+}
+
+.memorial-dates > div {
+  display: grid;
+  min-height: 45px;
+  grid-template-columns: 24px minmax(75px, 0.6fr) 1fr;
+  align-items: center;
+  gap: var(--space-2);
+  border-bottom: 1px solid rgba(105, 83, 120, 0.1);
+}
+
+.memorial-dates > div:last-child {
+  border-bottom: 0;
+}
+
+.memorial-dates svg,
+.memorial-dates span {
+  color: #75657f;
 }
 
 .profile-card,
@@ -1061,6 +1148,11 @@ button.connection-person:focus-visible {
   margin-top: 3px;
   color: var(--color-text-muted);
   font-size: 0.71rem;
+}
+
+.connection-person .in-memory-label {
+  color: #765f83;
+  font-weight: 800;
 }
 
 .connection-person--subject {

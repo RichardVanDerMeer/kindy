@@ -124,6 +124,23 @@ export class SqliteKindyRepository implements KindyRepository {
       isFavorite: bool(row.is_favorite),
       isArchived: bool(row.is_archived),
       isDeceased: bool(row.is_deceased),
+      birthDate:
+        row.birth_month == null || row.birth_day == null
+          ? undefined
+          : {
+              year: optionalNumber(row.birth_year) ?? null,
+              month: Number(row.birth_month),
+              day: Number(row.birth_day),
+            },
+      deathDate:
+        row.death_month == null || row.death_day == null
+          ? undefined
+          : {
+              year: optionalNumber(row.death_year) ?? null,
+              month: Number(row.death_month),
+              day: Number(row.death_day),
+            },
+      memorialNote: optionalString(row.memorial_note),
       howWeMet: optionalString(row.how_we_met),
       createdAt: Number(row.created_at),
       updatedAt: Number(row.updated_at),
@@ -187,6 +204,8 @@ export class SqliteKindyRepository implements KindyRepository {
       toPersonId: String(row.to_person_id),
       type: String(row.type) as Relationship['type'],
       customLabel: optionalString(row.custom_label),
+      fromPersonLabel: optionalString(row.from_person_label),
+      toPersonLabel: optionalString(row.to_person_label),
       startedOn: optionalString(row.started_on),
       endedOn: optionalString(row.ended_on),
       note: optionalString(row.note),
@@ -338,13 +357,15 @@ export class SqliteKindyRepository implements KindyRepository {
       }
       for (const relationship of data.relationships) {
         await db.run(
-          'INSERT INTO relationships(id,from_person_id,to_person_id,type,custom_label,started_on,ended_on,note) VALUES(?,?,?,?,?,?,?,?)',
+          'INSERT INTO relationships(id,from_person_id,to_person_id,type,custom_label,from_person_label,to_person_label,started_on,ended_on,note) VALUES(?,?,?,?,?,?,?,?,?,?)',
           [
             relationship.id,
             relationship.fromPersonId,
             relationship.toPersonId,
             relationship.type,
             relationship.customLabel ?? null,
+            relationship.fromPersonLabel ?? null,
+            relationship.toPersonLabel ?? null,
             relationship.startedOn ?? null,
             relationship.endedOn ?? null,
             relationship.note ?? null,
@@ -572,9 +593,9 @@ export class SqliteKindyRepository implements KindyRepository {
   private async writePerson(person: Person): Promise<void> {
     const db = this.requireDatabase()
     await db.run(
-      `INSERT INTO people(id,display_name,given_name,middle_name,family_name,nickname,pronouns,photo_ref,is_favorite,is_archived,is_deceased,how_we_met,created_at,updated_at,deleted_at)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-       ON CONFLICT(id) DO UPDATE SET display_name=excluded.display_name,given_name=excluded.given_name,middle_name=excluded.middle_name,family_name=excluded.family_name,nickname=excluded.nickname,pronouns=excluded.pronouns,photo_ref=excluded.photo_ref,is_favorite=excluded.is_favorite,is_archived=excluded.is_archived,is_deceased=excluded.is_deceased,how_we_met=excluded.how_we_met,updated_at=excluded.updated_at,deleted_at=excluded.deleted_at`,
+      `INSERT INTO people(id,display_name,given_name,middle_name,family_name,nickname,pronouns,photo_ref,is_favorite,is_archived,is_deceased,birth_year,birth_month,birth_day,death_year,death_month,death_day,memorial_note,how_we_met,created_at,updated_at,deleted_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET display_name=excluded.display_name,given_name=excluded.given_name,middle_name=excluded.middle_name,family_name=excluded.family_name,nickname=excluded.nickname,pronouns=excluded.pronouns,photo_ref=excluded.photo_ref,is_favorite=excluded.is_favorite,is_archived=excluded.is_archived,is_deceased=excluded.is_deceased,birth_year=excluded.birth_year,birth_month=excluded.birth_month,birth_day=excluded.birth_day,death_year=excluded.death_year,death_month=excluded.death_month,death_day=excluded.death_day,memorial_note=excluded.memorial_note,how_we_met=excluded.how_we_met,updated_at=excluded.updated_at,deleted_at=excluded.deleted_at`,
       [
         person.id,
         person.displayName,
@@ -587,6 +608,13 @@ export class SqliteKindyRepository implements KindyRepository {
         Number(person.isFavorite),
         Number(person.isArchived),
         Number(person.isDeceased),
+        person.birthDate?.year ?? null,
+        person.birthDate?.month ?? null,
+        person.birthDate?.day ?? null,
+        person.deathDate?.year ?? null,
+        person.deathDate?.month ?? null,
+        person.deathDate?.day ?? null,
+        person.memorialNote ?? null,
         person.howWeMet ?? null,
         person.createdAt,
         person.updatedAt,

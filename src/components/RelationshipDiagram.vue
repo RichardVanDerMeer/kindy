@@ -9,6 +9,7 @@ export interface DisplayRelationship {
   id: string
   displayType: RelationshipType
   customLabel?: string
+  displayLabel?: string
   person?: Person
 }
 
@@ -68,9 +69,13 @@ function select(person?: Person): void {
               :name="relationship.person.displayName"
               size="medium"
               :tone="index + 2"
+              :deceased="relationship.person.isDeceased"
             />
             <strong>{{ relationship.person?.displayName }}</strong>
-            <small>{{ relationship.customLabel || $t('connections.parent') }}</small>
+            <small>{{ relationship.displayLabel || $t('connections.parent') }}</small>
+            <small v-if="relationship.person?.isDeceased" class="in-memory-label">{{
+              $t('memorial.inMemory')
+            }}</small>
           </button>
         </div>
       </div>
@@ -99,9 +104,10 @@ function select(person?: Person): void {
                 :name="relationship.person.displayName"
                 size="medium"
                 :tone="index + 1"
+                :deceased="relationship.person.isDeceased"
               />
               <strong>{{ relationship.person?.displayName }}</strong>
-              <small>{{ relationship.customLabel || $t('connections.partner') }}</small>
+              <small>{{ relationship.displayLabel || $t('connections.partner') }}</small>
             </button>
           </template>
         </div>
@@ -127,9 +133,10 @@ function select(person?: Person): void {
               :name="relationship.person.displayName"
               size="medium"
               :tone="index + 1"
+              :deceased="relationship.person.isDeceased"
             />
             <strong>{{ relationship.person?.displayName }}</strong>
-            <small>{{ relationship.customLabel || $t('connections.child') }}</small>
+            <small>{{ relationship.displayLabel || $t('connections.child') }}</small>
           </button>
         </div>
       </div>
@@ -155,10 +162,11 @@ function select(person?: Person): void {
           :name="relationship.person.displayName"
           size="medium"
           :tone="index + 3"
+          :deceased="relationship.person.isDeceased"
         />
         <span class="friend-connection__copy">
           <strong>{{ relationship.person?.displayName }}</strong>
-          <small>{{ relationship.customLabel || $t('connections.friend') }}</small>
+          <small>{{ relationship.displayLabel || $t('connections.friend') }}</small>
         </span>
         <span class="friend-link" aria-hidden="true">
           <span />
@@ -180,10 +188,11 @@ function select(person?: Person): void {
           v-if="relationship.person"
           :name="relationship.person.displayName"
           size="small"
+          :deceased="relationship.person.isDeceased"
         />
         <span>
           <strong>{{ relationship.person?.displayName }}</strong>
-          <small>{{ relationship.customLabel || relationship.displayType }}</small>
+          <small>{{ relationship.displayLabel || relationship.displayType }}</small>
         </span>
       </button>
     </article>

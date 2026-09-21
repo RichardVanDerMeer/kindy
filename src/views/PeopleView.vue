@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ChevronRight, Plus, Search, Star } from '@lucide/vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useRoute } from 'vue-router'
 
@@ -9,12 +10,15 @@ import GoogleContactsDialog from '@/components/GoogleContactsDialog.vue'
 import PersonAvatar from '@/components/PersonAvatar.vue'
 import ViewHeader from '@/components/ViewHeader.vue'
 import { normalizeText } from '@/domain/duplicates'
+import { formatPartialDate } from '@/domain/dates'
+import type { Person } from '@/domain/model'
 import { useKindyStore } from '@/stores/kindy'
 import type { ExternalContactsConnection, ExternalContactSnapshot } from '@/domain/ports'
 
 const store = useKindyStore()
 const router = useRouter()
 const route = useRoute()
+const { locale, t } = useI18n()
 const query = ref('')
 const filter = ref<'all' | 'favorites' | string>('all')
 const showAddPerson = ref(false)
@@ -50,9 +54,13 @@ function circleCount(circleId: string): number {
   ).length
 }
 
-function personSubtitle(personId: string): string {
+function personSubtitle(person: Person): string {
+  if (person.isDeceased) {
+    const date = person.deathDate ? formatPartialDate(person.deathDate, locale.value) : ''
+    return date ? t('memorial.listSubtitle', { date }) : t('memorial.inMemory')
+  }
   return store
-    .circleMemberships(personId)
+    .circleMemberships(person.id)
     .map((membership) => membership.circle?.name)
     .filter(Boolean)
     .join(' · ')
@@ -129,14 +137,22 @@ async function importGoogleContacts(
     </div>
 
     <div v-if="filteredPeople.length" class="person-list">
-      <article v-for="(person, index) in filteredPeople" :key="person.id" class="person-row">
+      <article
+        v-for="(person, index) in filteredPeople"
+        :key="person.id"
+        class="person-row"
+        :class="{ 'person-row--deceased': person.isDeceased }"
+      >
         <button class="person-row__main" @click="router.push(`/people/${person.id}`)">
-          <PersonAvatar :name="person.displayName" :photo-ref="person.photoRef" :tone="index" />
+          <PersonAvatar
+            :name="person.displayName"
+            :photo-ref="person.photoRef"
+            :tone="index"
+            :deceased="person.isDeceased"
+          />
           <span class="person-row__copy">
             <strong>{{ person.displayName }}</strong>
-            <span>{{
-              personSubtitle(person.id) || person.howWeMet || $t('brand.descriptor')
-            }}</span>
+            <span>{{ personSubtitle(person) || person.howWeMet || $t('brand.descriptor') }}</span>
           </span>
         </button>
         <button

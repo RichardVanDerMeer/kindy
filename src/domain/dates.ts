@@ -31,3 +31,15 @@ export function formatPartialDate(date: PartialDate, locale: string): string {
     timeZone: 'UTC',
   }).format(new Date(Date.UTC(year, date.month - 1, date.day)))
 }
+
+export function ageBetween(birthDate: PartialDate, laterDate: PartialDate): number | null {
+  if (birthDate.year === null || laterDate.year === null) return null
+  let age = laterDate.year - birthDate.year
+  if (
+    laterDate.month < birthDate.month ||
+    (laterDate.month === birthDate.month && laterDate.day < birthDate.day)
+  ) {
+    age -= 1
+  }
+  return age >= 0 ? age : null
+}

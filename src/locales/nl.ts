@@ -42,6 +42,15 @@ export default {
     friendsHint: 'Persoonlijke connecties buiten de familie.',
     other: 'Andere connecties',
   },
+  memorial: {
+    inMemory: 'In herinnering',
+    listSubtitle: 'In herinnering · overleden {date}',
+    remembering: 'Ter herinnering aan {name}',
+    born: 'Geboren',
+    died: 'Overleden',
+    age: 'Leeftijd',
+    years: '{count} jaar',
+  },
   circles: {
     title: 'Jouw kringen',
     members: '{count} leden',

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isValidPartialDate, nextPartialDate } from '@/domain/dates'
+import { ageBetween, isValidPartialDate, nextPartialDate } from '@/domain/dates'
 import { scoreDuplicate } from '@/domain/duplicates'
 import type { Person } from '@/domain/model'
 import { nextOccurrence } from '@/domain/reminders'
@@ -73,6 +73,12 @@ describe('partial dates', () => {
   it('rolls an annual date into the next year', () => {
     const next = nextPartialDate({ year: null, month: 1, day: 5 }, new Date('2026-09-19T12:00:00Z'))
     expect(next.toISOString()).toBe('2027-01-05T09:00:00.000Z')
+  })
+
+  it('calculates age at death without rounding up before the birthday', () => {
+    expect(ageBetween({ year: 1948, month: 5, day: 20 }, { year: 2024, month: 5, day: 14 })).toBe(
+      75,
+    )
   })
 })
 
