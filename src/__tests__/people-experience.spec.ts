@@ -226,3 +226,33 @@ describe('upcoming filters', () => {
     expect(selected.size).toBe(0)
   })
 })
+
+describe('divorce', () => {
+  it('ends the yearly wedding day and shows on both timelines', () => {
+    const wedding = {
+      id: 'wedding',
+      type: 'wedding-anniversary' as const,
+      title: 'Trouwdag',
+      date: { year: 2005, month: 10, day: 1 },
+      personIds: ['a', 'b'],
+      source: 'kindy' as const,
+    }
+    const divorce = {
+      ...wedding,
+      id: 'divorce',
+      type: 'divorce' as const,
+      title: 'divorce',
+      date: { year: 2019, month: 3, day: 4 },
+      personIds: ['b', 'a'],
+    }
+    const base = { people: [person('a'), person('b')] }
+    const window = { daysBack: 0, daysAhead: 30 }
+    const today = { year: 2026, month: 9, day: 27 }
+
+    expect(buildAgenda(data({ ...base, events: [wedding] }), today, window)).toHaveLength(1)
+    expect(buildAgenda(data({ ...base, events: [wedding, divorce] }), today, window)).toEqual([])
+
+    const timeline = personTimeline('a', data({ ...base, events: [wedding, divorce] }))
+    expect(timeline.dated.map((entry) => entry.kind)).toEqual(['divorced', 'married'])
+  })
+})

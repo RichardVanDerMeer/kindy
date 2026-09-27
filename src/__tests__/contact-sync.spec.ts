@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import {
+  allSyncFields,
   enqueueSync,
+  fieldsToWrite,
   importedContactDates,
   managedContactFields,
   planContactUpdate,
@@ -96,6 +99,7 @@ describe('planning a contact update', () => {
       },
       { birthday: null, events: [{ type: 'anniversary', date: { year: 2010, month: 6, day: 1 } }] },
       { birthday: null, events: [{ type: 'anniversary', date: { year: 2011, month: 6, day: 1 } }] },
+      ['events'],
     )
     expect(plan).toEqual({
       updatePersonFields: ['events'],
@@ -104,10 +108,12 @@ describe('planning a contact update', () => {
   })
 
   it('only touches the birthday when that is all that changed', () => {
-    const plan = planContactUpdate({ birthdays: [], events: [nameDay] }, undefined, {
-      birthday: { year: 1990, month: 10, day: 3 },
-      events: [],
-    })
+    const plan = planContactUpdate(
+      { birthdays: [], events: [nameDay] },
+      undefined,
+      { birthday: { year: 1990, month: 10, day: 3 }, events: [] },
+      allSyncFields,
+    )
     expect(plan).toEqual({
       updatePersonFields: ['birthdays'],
       birthdays: [{ year: 1990, month: 10, day: 3 }],
@@ -126,6 +132,7 @@ describe('planning a contact update', () => {
       },
       { birthday: null, events: [], phones: ['+31611111111', '+31 20 222 2222'] },
       { birthday: null, events: [], phones: ['+31611111111', '+31 6 3333 3333'] },
+      ['phones'],
     )
     expect(plan).toEqual({
       updatePersonFields: ['phoneNumbers'],
@@ -134,19 +141,56 @@ describe('planning a contact update', () => {
   })
 
   it('leaves fields that are kept in Kindy only untouched', () => {
+    const fields = fieldsToWrite({ kind: 'update', fields: ['name', 'birthday'] }, [
+      'name',
+      'birthday',
+    ])
     const plan = planContactUpdate(
       { birthdays: [], events: [], name: { givenName: 'Robin' } },
       undefined,
       { birthday: { month: 1, day: 1 }, events: [], name: { givenName: 'Rob' } },
-      ['name', 'birthday'],
+      fields,
     )
+    expect(fields).toEqual([])
     expect(plan).toBeNull()
+  })
+
+  it('only writes the fields the user changed', () => {
+    // The name differs from Google (renamed there), but only the birthday was changed in Kindy.
+    const plan = planContactUpdate(
+      { birthdays: [], events: [], name: { givenName: 'Robert' }, phones: [{ value: '1' }] },
+      { birthday: null, events: [], phones: ['1'] },
+      { birthday: { month: 5, day: 4 }, events: [], name: { givenName: 'Robin' }, phones: [] },
+      ['birthday'],
+    )
+    expect(plan?.updatePersonFields).toEqual(['birthdays'])
+  })
+
+  it('keeps middle names and prefixes when the name is updated', () => {
+    const plan = planContactUpdate(
+      {
+        birthdays: [],
+        events: [],
+        name: { givenName: 'Jan', familyName: 'Berg', preserved: { middleName: 'van den' } },
+      },
+      undefined,
+      { birthday: null, events: [], name: { givenName: 'Johan', familyName: 'Berg' } },
+      ['name'],
+    )
+    expect(plan?.names).toEqual([
+      { preserved: { middleName: 'van den' }, givenName: 'Johan', familyName: 'Berg' },
+    ])
   })
 
   it('does nothing when Google already matches', () => {
     const current = { birthday: { month: 1, day: 2 }, events: [] }
     expect(
-      planContactUpdate({ birthdays: [{ month: 1, day: 2 }], events: [] }, current, current),
+      planContactUpdate(
+        { birthdays: [{ month: 1, day: 2 }], events: [] },
+        current,
+        current,
+        allSyncFields,
+      ),
     ).toBeNull()
   })
 })
@@ -294,6 +338,7 @@ describe('running the sync', () => {
             id: 'op',
             personId: 'robin',
             kind: 'update',
+            fields: ['name', 'photo'],
             state: 'pending',
             attempts: 0,
             updatedAt: 1,
@@ -375,6 +420,46 @@ describe('running the sync', () => {
       attempts: 1,
       lastError: 'Google Contacts returned HTTP 503',
     })
+  })
+})
+
+describe('account safety', () => {
+  it('never writes a contact that belongs to another Google account', async () => {
+    const google = new FakeGoogle()
+    const repository = memoryRepository(
+      data({
+        people: [person('robin', { birthDate: { year: null, month: 1, day: 1 } })],
+        externalIdentities: [{ ...identity, providerAccountId: 'someone-else' }],
+        syncQueue: [
+          {
+            id: 'op',
+            personId: 'robin',
+            kind: 'update',
+            fields: ['birthday'],
+            state: 'pending',
+            attempts: 0,
+            updatedAt: 1,
+          },
+        ],
+      }),
+    )
+
+    await runContactSync({ repository, gateway: google, labels })
+
+    expect(google.updates).toEqual([])
+    expect(repository.current.syncQueue[0]).toMatchObject({
+      state: 'failed',
+      lastError: 'Linked to another Google account',
+    })
+  })
+
+  it('has no way to delete a Google contact', () => {
+    const plugin = readFileSync(
+      'android/app/src/main/java/nl/richardvandermeer/kindy/contacts/KindyGoogleContactsPlugin.kt',
+      'utf8',
+    )
+    expect(plugin).not.toMatch(/deleteContact|batchDelete|"DELETE"/)
+    expect(Object.getOwnPropertyNames(FakeGoogle.prototype).join()).not.toMatch(/delete/i)
   })
 })
 

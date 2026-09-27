@@ -13,7 +13,7 @@ const items = [
 </script>
 
 <template>
-  <nav class="bottom-nav" aria-label="Primary">
+  <nav class="bottom-nav" :aria-label="t('nav.label')">
     <RouterLink
       v-for="item in items"
       :key="item.to"

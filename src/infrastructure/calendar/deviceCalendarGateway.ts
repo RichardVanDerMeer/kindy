@@ -14,6 +14,7 @@ interface CalendarPlugin {
   listCalendars(): Promise<{ calendars: DeviceCalendar[] }>
   listEvents(options: { from: number; to: number }): Promise<{ events: DeviceCalendarEvent[] }>
   createEvent(options: NewCalendarEvent): Promise<{ id: string }>
+  updateEvent(options: { id: string } & Omit<NewCalendarEvent, 'calendarId'>): Promise<void>
 }
 
 const nativePlugin = registerPlugin<CalendarPlugin>('KindyCalendar')
@@ -43,6 +44,10 @@ class NativeDeviceCalendarGateway implements DeviceCalendarGateway {
 
   async createEvent(input: NewCalendarEvent): Promise<{ id: string }> {
     return nativePlugin.createEvent(input)
+  }
+
+  async updateEvent(id: string, input: Omit<NewCalendarEvent, 'calendarId'>): Promise<void> {
+    await nativePlugin.updateEvent({ id, ...input })
   }
 }
 
@@ -126,6 +131,22 @@ class PreviewDeviceCalendarGateway implements DeviceCalendarGateway {
     })
     this.write(PREVIEW_EVENTS_KEY, JSON.stringify(events))
     return { id }
+  }
+
+  async updateEvent(id: string, input: Omit<NewCalendarEvent, 'calendarId'>): Promise<void> {
+    const events = this.events().map((event) =>
+      event.id === id
+        ? {
+            ...event,
+            title: input.title,
+            startsAt: input.startsAt,
+            endsAt: input.endsAt,
+            allDay: input.allDay,
+            location: input.location,
+          }
+        : event,
+    )
+    this.write(PREVIEW_EVENTS_KEY, JSON.stringify(events))
   }
 
   private events(): DeviceCalendarEvent[] {

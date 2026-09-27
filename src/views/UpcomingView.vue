@@ -3,7 +3,8 @@ import { computed, ref } from 'vue'
 import { CalendarPlus, ChevronDown, ChevronUp, Plus } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 
-import AddAgendaItemDialog, { type AgendaDraft } from '@/components/AddAgendaItemDialog.vue'
+import AddAgendaItemDialog from '@/components/AddAgendaItemDialog.vue'
+import type { AgendaDraft } from '@/domain/agendaDraft'
 import AgendaCard from '@/components/AgendaCard.vue'
 import CalendarSuggestions from '@/components/CalendarSuggestions.vue'
 import ViewHeader from '@/components/ViewHeader.vue'
@@ -33,18 +34,12 @@ const addError = ref<string>()
 
 async function save(draft: AgendaDraft): Promise<void> {
   addError.value = undefined
-  if (draft.kind === 'appointment') {
-    try {
-      await store.createAppointment(draft)
-    } catch {
-      addError.value = t('agendaAdd.appointment.failed')
-      return
-    }
-  } else if (draft.kind === 'memo') await store.addMemo(draft)
-  else if (draft.kind === 'birthday') await store.setBirthDate(draft.personId, draft.date)
-  else if (draft.kind === 'death') await store.markDeceased(draft.personId, draft.date)
-  else await store.addWeddingAnniversary(draft.personIds, draft.date)
-  showAdd.value = false
+  try {
+    await store.addFromDraft(draft)
+    showAdd.value = false
+  } catch {
+    addError.value = t('agendaAdd.appointment.failed')
+  }
 }
 
 function toggle(filter: AgendaFilter): void {
@@ -86,17 +81,21 @@ const groups = computed(() => {
     <ViewHeader />
     <h1>{{ $t('upcoming.title') }}</h1>
 
-    <button
-      v-if="store.calendarPermission !== 'granted'"
+    <div
+      v-if="store.calendarPermission !== 'granted' && !store.calendarPromptDismissed"
       class="calendar-connect card"
-      @click="store.connectCalendar()"
     >
-      <CalendarPlus :size="20" />
-      <span>
-        <strong>{{ $t('calendar.connect') }}</strong>
-        <small>{{ $t('calendar.connectHint') }}</small>
-      </span>
-    </button>
+      <button class="calendar-connect__main" @click="store.connectCalendar()">
+        <CalendarPlus :size="20" />
+        <span>
+          <strong>{{ $t('calendar.connect') }}</strong>
+          <small>{{ $t('calendar.connectHint') }}</small>
+        </span>
+      </button>
+      <button class="calendar-connect__later" @click="store.dismissCalendarPrompt()">
+        {{ $t('calendar.notNow') }}
+      </button>
+    </div>
     <CalendarSuggestions :limit="2" />
 
     <div class="filter-row" role="group" :aria-label="$t('upcoming.title')">

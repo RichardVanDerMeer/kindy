@@ -4,32 +4,20 @@ import {
   ArrowLeft,
   Cake,
   CalendarClock,
+  CalendarPlus,
   ChevronRight,
   CloudUpload,
   Flower2,
   Heart,
+  HeartCrack,
   NotebookPen,
 } from '@lucide/vue'
 
+import type { AgendaDraft, AgendaDraftKind } from '@/domain/agendaDraft'
 import type { PartialDate, Person } from '@/domain/model'
 
 import PartialDateInput from './PartialDateInput.vue'
 import PersonPicker from './PersonPicker.vue'
-
-export type AgendaDraft =
-  | { kind: 'memo'; personId: string; text: string; date: string }
-  | { kind: 'birthday'; personId: string; date: PartialDate }
-  | { kind: 'wedding'; personIds: string[]; date: PartialDate }
-  | { kind: 'death'; personId: string; date: PartialDate }
-  | {
-      kind: 'appointment'
-      personIds: string[]
-      title: string
-      startsAt: number
-      endsAt: number
-      allDay: boolean
-      location?: string
-    }
 
 const props = defineProps<{
   open: boolean
@@ -37,13 +25,15 @@ const props = defineProps<{
   /** People whose dates are also written to Google Contacts. */
   syncedPersonIds: string[]
   /** Skip the choice screen, e.g. "plan appointment" from a profile. */
-  initialKind?: AgendaDraft['kind']
+  initialKind?: AgendaDraftKind
   initialPersonIds?: string[]
+  /** Which kinds to offer; a timeline also offers divorce, Upcoming does not. */
+  kinds?: AgendaDraftKind[]
   error?: string
 }>()
 const emit = defineEmits<{ close: []; save: [draft: AgendaDraft] }>()
 
-type Kind = AgendaDraft['kind']
+type Kind = AgendaDraftKind
 const kind = ref<Kind>()
 const personIds = ref<string[]>([])
 const text = ref('')
@@ -54,6 +44,7 @@ const appointmentTime = ref('19:00')
 const allDay = ref(false)
 const durationMinutes = ref(120)
 const location = ref('')
+const customTitle = ref('')
 const durations = [30, 60, 90, 120, 180]
 
 function todayIso(): string {
@@ -69,6 +60,7 @@ function choose(next?: Kind): void {
   allDay.value = false
   durationMinutes.value = 120
   location.value = ''
+  customTitle.value = ''
   text.value = ''
   memoDate.value = todayIso()
   partialDate.value = undefined
@@ -81,21 +73,34 @@ watch(
   },
 )
 
-const options = [
+const allOptions = [
   { kind: 'appointment', icon: CalendarClock },
   { kind: 'memo', icon: NotebookPen },
   { kind: 'birthday', icon: Cake },
   { kind: 'wedding', icon: Heart },
+  { kind: 'divorce', icon: HeartCrack },
   { kind: 'death', icon: Flower2 },
+  { kind: 'custom', icon: CalendarPlus },
 ] as const
+const options = computed(() =>
+  allOptions.filter((option) =>
+    (props.kinds ?? ['appointment', 'memo', 'birthday', 'wedding', 'death', 'custom']).includes(
+      option.kind,
+    ),
+  ),
+)
 
-/** Memos stay in Kindy; the dates are written to linked Google contacts. */
+/** Birthdays, wedding days and deaths are also written to linked Google contacts. */
 const writesToGoogle = computed(
   () =>
-    kind.value !== 'memo' &&
-    kind.value !== 'appointment' &&
+    (kind.value === 'birthday' || kind.value === 'wedding' || kind.value === 'death') &&
     personIds.value.some((personId) => props.syncedPersonIds.includes(personId)),
 )
+const maxPeople = computed(() => {
+  if (kind.value === 'wedding' || kind.value === 'divorce') return 2
+  if (kind.value === 'appointment' || kind.value === 'custom') return undefined
+  return 1
+})
 
 const pickable = computed(() =>
   kind.value === 'death'
@@ -111,7 +116,14 @@ const valid = computed(() => {
     case 'death':
       return personIds.value.length === 1 && Boolean(partialDate.value)
     case 'wedding':
+    case 'divorce':
       return personIds.value.length >= 1 && Boolean(partialDate.value)
+    case 'custom':
+      return (
+        personIds.value.length >= 1 &&
+        Boolean(customTitle.value.trim()) &&
+        Boolean(partialDate.value)
+      )
     case 'appointment':
       return (
         personIds.value.length >= 1 &&
@@ -133,6 +145,15 @@ function submit(): void {
     emit('save', { kind: 'birthday', personId, date: partialDate.value })
   } else if (kind.value === 'wedding' && partialDate.value) {
     emit('save', { kind: 'wedding', personIds: personIds.value, date: partialDate.value })
+  } else if (kind.value === 'divorce' && partialDate.value) {
+    emit('save', { kind: 'divorce', personIds: [...personIds.value], date: partialDate.value })
+  } else if (kind.value === 'custom' && partialDate.value) {
+    emit('save', {
+      kind: 'custom',
+      personIds: [...personIds.value],
+      title: customTitle.value,
+      date: partialDate.value,
+    })
   } else if (kind.value === 'death' && partialDate.value) {
     emit('save', { kind: 'death', personId, date: partialDate.value })
   } else if (kind.value === 'appointment') {
@@ -250,31 +271,33 @@ function submit(): void {
             </label>
           </template>
 
-          <fieldset v-else class="field picker-field">
-            <legend>
-              {{
-                kind === 'birthday' || kind === 'death'
-                  ? $t(`agendaAdd.${kind}.date`)
-                  : $t('agendaAdd.date')
-              }}
-            </legend>
-            <PartialDateInput v-model="partialDate" />
-          </fieldset>
+          <template v-else>
+            <label v-if="kind === 'custom'" class="field">
+              <span>{{ $t('agendaAdd.custom.name') }}</span>
+              <input v-model="customTitle" required autocomplete="off" />
+            </label>
+            <fieldset class="field picker-field">
+              <legend>
+                {{
+                  kind === 'birthday' || kind === 'death'
+                    ? $t(`agendaAdd.${kind}.date`)
+                    : $t('agendaAdd.date')
+                }}
+              </legend>
+              <PartialDateInput v-model="partialDate" />
+            </fieldset>
+          </template>
 
           <p class="dialog-question">
             {{
-              kind === 'wedding'
-                ? $t('agendaAdd.wedding.people')
-                : kind === 'appointment'
+              kind === 'wedding' || kind === 'divorce' || kind === 'appointment'
+                ? $t(`agendaAdd.${kind}.people`)
+                : kind === 'custom'
                   ? $t('agendaAdd.appointment.people')
                   : $t('agendaAdd.person')
             }}
           </p>
-          <PersonPicker
-            v-model="personIds"
-            :candidates="pickable"
-            :max="kind === 'wedding' ? 2 : kind === 'appointment' ? undefined : 1"
-          />
+          <PersonPicker v-model="personIds" :candidates="pickable" :max="maxPeople" />
 
           <p v-if="error" class="form-error" role="alert">{{ error }}</p>
           <p v-if="writesToGoogle" class="sync-hint">

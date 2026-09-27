@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { Pencil, Star } from '@lucide/vue'
 
+import { useImageFallback } from '@/composables/imageFallback'
 import type { Circle } from '@/domain/model'
 import { useKindyStore } from '@/stores/kindy'
 
@@ -17,6 +18,9 @@ const store = useKindyStore()
 const members = computed(() => store.circleMembers(props.circle.id))
 // The user is part of most of their own circles; the stack shows the others.
 const others = computed(() => members.value.filter((person) => !person.isSelf))
+const { src: backgroundSrc, onError: onBackgroundError } = useImageFallback(
+  () => props.circle.backgroundImageRef,
+)
 </script>
 
 <template>
@@ -24,14 +28,15 @@ const others = computed(() => members.value.filter((person) => !person.isSelf))
     class="circle-card"
     :class="[
       `surface--${circle.colorToken}`,
-      { 'circle-card--image': circle.backgroundImageRef, 'circle-card--compact': compact },
+      { 'circle-card--image': backgroundSrc, 'circle-card--compact': compact },
     ]"
   >
     <img
-      v-if="circle.backgroundImageRef"
+      v-if="backgroundSrc"
       class="circle-card__image"
-      :src="circle.backgroundImageRef"
+      :src="backgroundSrc"
       alt=""
+      @error="onBackgroundError"
     />
     <button class="circle-card__open" :aria-label="circle.name" @click="emit('open')" />
     <div class="circle-card__top">

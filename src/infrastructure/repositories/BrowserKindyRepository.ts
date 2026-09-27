@@ -55,6 +55,13 @@ export class BrowserKindyRepository implements KindyRepository {
         this.data.calendarLinks ??= []
         this.data.schemaVersion = SCHEMA_VERSION
       }
+      // Circle backgrounds moved from demo-backgrounds/ to circle-backgrounds/.
+      for (const circle of this.data.circles) {
+        circle.backgroundImageRef = circle.backgroundImageRef?.replace(
+          '/demo-backgrounds/',
+          '/circle-backgrounds/',
+        )
+      }
       await this.persist()
       return
     }

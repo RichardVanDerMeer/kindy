@@ -129,14 +129,26 @@ export function buildAgenda(
   }
 
   const birthdayEventPeople = new Set<EntityId>()
+  const samePeople = (left: EntityId[], right: EntityId[]) =>
+    left.length === right.length && left.every((id) => right.includes(id))
+  const divorces = data.events.filter((event) => event.type === 'divorce')
+
   for (const event of data.events) {
     const personIds = event.personIds.filter((id) => activePeople.has(id))
     if (event.personIds.length && !personIds.length) continue
+    // A divorced couple's wedding day is no longer something to celebrate.
+    if (
+      event.type === 'wedding-anniversary' &&
+      divorces.some((divorce) => samePeople(divorce.personIds, event.personIds))
+    ) {
+      continue
+    }
     if (event.type === 'birthday') event.personIds.forEach((id) => birthdayEventPeople.add(id))
     addEventOccurrences(event, personIds)
   }
 
   function addEventOccurrences(event: ImportantEvent, personIds: EntityId[]): void {
+    if (event.type === 'divorce') return
     if (event.type === 'custom' && event.date.year !== null) {
       const offset = dayNumber(event.date as CalendarDay) - todayNumber
       if (offset >= -window.daysBack && offset <= window.daysAhead) {

@@ -1,18 +1,8 @@
 package nl.richardvandermeer.kindy.widgets
 
-import android.appwidget.AppWidgetManager
-import android.appwidget.AppWidgetProvider
-import android.content.Context
-import android.widget.RemoteViews
-import nl.richardvandermeer.kindy.R
+import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetReceiver
 
-class ComingUpWidgetReceiver : AppWidgetProvider() {
-    override fun onUpdate(context: Context, manager: AppWidgetManager, appWidgetIds: IntArray) {
-        appWidgetIds.forEach { appWidgetId ->
-            manager.updateAppWidget(
-                appWidgetId,
-                RemoteViews(context.packageName, R.layout.widget_loading),
-            )
-        }
-    }
+class ComingUpWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = ComingUpWidget()
 }

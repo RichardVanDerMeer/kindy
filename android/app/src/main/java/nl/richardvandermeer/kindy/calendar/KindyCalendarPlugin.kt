@@ -171,6 +171,44 @@ class KindyCalendarPlugin : Plugin() {
         }
     }
 
+    /**
+     * Updates an appointment by id. The app only calls this for appointments it
+     * created itself; appointments from other sources are never changed.
+     */
+    @PluginMethod
+    fun updateEvent(call: PluginCall) {
+        if (!hasCalendarAccess(call)) return
+        val eventId = call.getString("id")?.toLongOrNull()
+        val title = call.getString("title")
+        val startsAt = call.getLong("startsAt")
+        val endsAt = call.getLong("endsAt")
+        val allDay = call.getBoolean("allDay", false) == true
+        if (eventId == null || title.isNullOrBlank() || startsAt == null || endsAt == null) {
+            call.reject("Appointment, title and times are required")
+            return
+        }
+        execute {
+            try {
+                val values = ContentValues().apply {
+                    put(CalendarContract.Events.TITLE, title)
+                    put(CalendarContract.Events.DTSTART, startsAt)
+                    put(CalendarContract.Events.DTEND, endsAt)
+                    put(CalendarContract.Events.ALL_DAY, if (allDay) 1 else 0)
+                    put(
+                        CalendarContract.Events.EVENT_TIMEZONE,
+                        if (allDay) "UTC" else TimeZone.getDefault().id,
+                    )
+                    put(CalendarContract.Events.EVENT_LOCATION, call.getString("location"))
+                }
+                val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
+                val updated = context.contentResolver.update(uri, values, null, null)
+                if (updated == 1) call.resolve() else call.reject("The appointment was not found")
+            } catch (error: Exception) {
+                call.reject("Unable to update the appointment", error)
+            }
+        }
+    }
+
     private fun attendeeEmails(eventIds: Set<Long>): Map<Long, List<String>> {
         if (eventIds.isEmpty()) return emptyMap()
         val result = mutableMapOf<Long, MutableList<String>>()

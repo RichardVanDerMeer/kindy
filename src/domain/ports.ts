@@ -1,4 +1,5 @@
 import type { DeviceCalendarEvent } from './calendar'
+import type { ComingUpSnapshot } from './widget'
 import type { ContactUpdate, RemoteContactFields } from './contactSync'
 import type {
   Circle,
@@ -140,8 +141,9 @@ export interface NotificationScheduler {
   cancelAll(): Promise<void>
 }
 
+/** Hands the home-screen widget its prepared, already privacy-filtered content. */
 export interface WidgetSnapshotWriter {
-  writeSnapshot(data: Pick<KindyData, 'people' | 'events' | 'reminders'>): Promise<void>
+  writeComingUp(snapshot: ComingUpSnapshot): Promise<void>
 }
 
 /** A single Kindy backup in the user's own cloud storage (Google Drive app folder). */
@@ -197,4 +199,6 @@ export interface DeviceCalendarGateway {
   listCalendars(): Promise<DeviceCalendar[]>
   listEvents(from: number, to: number): Promise<DeviceCalendarEvent[]>
   createEvent(input: NewCalendarEvent): Promise<{ id: string }>
+  /** Changes title, time or place of an appointment Kindy created earlier. */
+  updateEvent(id: string, input: Omit<NewCalendarEvent, 'calendarId'>): Promise<void>
 }

@@ -109,6 +109,11 @@ class KindyGoogleContactsPlugin : Plugin() {
                 }
 
                 val response = get(uri.build().toString(), token)
+                if (response.status == 401) {
+                    // Expired token: the app fetches a fresh one and retries.
+                    call.reject("Google Contacts returned HTTP 401", "401")
+                    return@execute
+                }
                 if (response.status !in 200..299) {
                     val expired = response.body.contains("EXPIRED_SYNC_TOKEN")
                     call.resolve(

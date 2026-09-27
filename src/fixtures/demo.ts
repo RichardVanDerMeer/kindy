@@ -116,6 +116,7 @@ export const demoData: KindyData = {
       contactPoints: [
         contact('demo-sophie', 'phone', '+31 6 12345601'),
         contact('demo-sophie', 'email', 'sophie@example.com'),
+        contact('demo-sophie', 'address', 'Oudegracht 120, 3511 AZ Utrecht', 'Thuis'),
       ],
     }),
     person('demo-emma', 'Emma van der Meer', {
@@ -139,6 +140,7 @@ export const demoData: KindyData = {
       contactPoints: [
         contact('demo-els', 'phone', '+31 6 12345603'),
         contact('demo-els', 'email', 'els@example.com'),
+        contact('demo-els', 'address', 'Dorpsstraat 8, 8401 AB Gorredijk', 'Thuis'),
       ],
     }),
     person('demo-robin', 'Robin Chen', {
@@ -148,6 +150,7 @@ export const demoData: KindyData = {
       contactPoints: [
         contact('demo-robin', 'phone', '+31 6 23456701'),
         contact('demo-robin', 'email', 'robin@example.com'),
+        contact('demo-robin', 'address', 'Wilhelminapark 3, 3581 NA Utrecht', 'Thuis'),
       ],
     }),
     person('demo-daan', 'Daan Visser', {

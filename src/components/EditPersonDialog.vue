@@ -15,6 +15,7 @@ const emit = defineEmits<{ close: []; saved: [] }>()
 const store = useKindyStore()
 const draft = ref<PersonEdit>(fromPerson())
 const birthDate = ref<PartialDate>()
+const deathDate = ref<PartialDate>()
 const syncToGoogle = ref(true)
 const fileInput = ref<HTMLInputElement>()
 const googlePhotoState = ref<'idle' | 'loading' | 'none'>('idle')
@@ -25,7 +26,7 @@ const syncActive = computed(() => linked.value && store.googleWriteBack)
 const excluded = computed(() => new Set(props.person.syncExclusions ?? []))
 
 function fromPerson(): PersonEdit {
-  const values = (kind: 'phone' | 'email') =>
+  const values = (kind: 'phone' | 'email' | 'address') =>
     props.person.contactPoints.filter((point) => point.kind === kind).map((point) => point.value)
   return {
     givenName: props.person.givenName ?? props.person.displayName,
@@ -34,7 +35,11 @@ function fromPerson(): PersonEdit {
     birthDate: props.person.birthDate,
     phones: values('phone'),
     emails: values('email'),
+    addresses: values('address'),
     photoRef: props.person.photoRef,
+    isDeceased: props.person.isDeceased,
+    deathDate: props.person.deathDate,
+    memorialNote: props.person.memorialNote,
   }
 }
 
@@ -44,6 +49,7 @@ watch(
     if (!isOpen) return
     draft.value = fromPerson()
     birthDate.value = props.person.birthDate ? { ...props.person.birthDate } : undefined
+    deathDate.value = props.person.deathDate ? { ...props.person.deathDate } : undefined
     syncToGoogle.value = true
     googlePhotoState.value = 'idle'
   },
@@ -80,7 +86,9 @@ async function submit(): Promise<void> {
       ...draft.value,
       phones: [...draft.value.phones],
       emails: [...draft.value.emails],
+      addresses: [...draft.value.addresses],
       birthDate: birthDate.value ? { ...birthDate.value } : undefined,
+      deathDate: draft.value.isDeceased && deathDate.value ? { ...deathDate.value } : undefined,
     },
     { syncToGoogle: syncActive.value && syncToGoogle.value },
   )
@@ -212,6 +220,43 @@ async function submit(): Promise<void> {
           </div>
           <button type="button" class="inline-action" @click="draft.emails.push('')">
             <Plus :size="16" /> {{ $t('edit.addEmail') }}
+          </button>
+        </fieldset>
+
+        <fieldset v-if="!person.isSelf" class="field picker-field memorial-fields">
+          <legend class="field-label">
+            {{ $t('edit.memorial') }}
+            <component :is="syncIcon('events')" v-if="syncIcon('events')" :size="14" />
+          </legend>
+          <label class="check-field">
+            <input v-model="draft.isDeceased" type="checkbox" />
+            <span>{{ $t('edit.isDeceased') }}</span>
+          </label>
+          <template v-if="draft.isDeceased">
+            <span class="field-hint">{{ $t('edit.deathDate') }}</span>
+            <PartialDateInput v-model="deathDate" />
+            <label class="field memorial-note">
+              <span>{{ $t('edit.memorialNote') }}</span>
+              <textarea v-model="draft.memorialNote" rows="2" />
+            </label>
+          </template>
+        </fieldset>
+
+        <fieldset class="field picker-field">
+          <legend class="field-label">{{ $t('edit.addresses') }}</legend>
+          <div v-for="(_, index) in draft.addresses" :key="`address-${index}`" class="list-input">
+            <input v-model="draft.addresses[index]" autocomplete="off" />
+            <button
+              type="button"
+              class="icon-button"
+              :aria-label="$t('edit.remove')"
+              @click="draft.addresses.splice(index, 1)"
+            >
+              <X :size="18" />
+            </button>
+          </div>
+          <button type="button" class="inline-action" @click="draft.addresses.push('')">
+            <Plus :size="16" /> {{ $t('edit.addAddress') }}
           </button>
         </fieldset>
 

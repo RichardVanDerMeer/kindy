@@ -47,8 +47,10 @@
                 android:resource="@xml/coming_up_widget_info" />
         </receiver>
 
+        <!-- Not finished yet: hidden from the widget picker until it shows real favourites. -->
         <receiver
             android:name=".widgets.FavoritesWidgetReceiver"
+            android:enabled="false"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

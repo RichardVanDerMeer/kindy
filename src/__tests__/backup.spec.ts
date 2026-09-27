@@ -64,3 +64,14 @@ describe('backups', () => {
     expect(isWorthBackingUp(data({ people: [robin] }))).toBe(true)
   })
 })
+
+describe('links', () => {
+  it('only keeps plain web links', async () => {
+    const { safeWebUrl } = await import('@/domain/links')
+    expect(safeWebUrl('www.bol.com/boek')).toBe('https://www.bol.com/boek')
+    expect(safeWebUrl('https://example.com/x')).toBe('https://example.com/x')
+    expect(safeWebUrl('javascript:alert(1)')).toBeUndefined()
+    expect(safeWebUrl('intent://scan#Intent;end')).toBeUndefined()
+    expect(safeWebUrl('   ')).toBeUndefined()
+  })
+})

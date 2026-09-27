@@ -116,16 +116,39 @@ function contactValues(
     .map((point) => point.value)
 }
 
+/** Every field Kindy can write; a new contact gets all of them. */
+export const allSyncFields: SyncField[] = [
+  'name',
+  'phones',
+  'emails',
+  'birthday',
+  'events',
+  'photo',
+]
+
+/** Update operations from before field tracking only ever carried dates. */
+const legacyUpdateFields: SyncField[] = ['birthday', 'events']
+
+/** The fields an operation may write: what the user changed, minus "Kindy only" fields. */
+export function fieldsToWrite(
+  operation: { kind: 'create' | 'update'; fields?: SyncField[] },
+  excluded: SyncField[],
+): SyncField[] {
+  const requested =
+    operation.kind === 'create' ? allSyncFields : (operation.fields ?? legacyUpdateFields)
+  return requested.filter((field) => !excluded.includes(field))
+}
+
 /**
- * What Google holds after a sync: the current values, except for fields the
- * user keeps in Kindy only, which keep whatever was written before.
+ * What Google holds after a sync: the written fields take their current
+ * value; every other field keeps what Kindy wrote before.
  */
 export function writtenAfterSync(
   previous: WrittenContactFields | undefined,
   current: WrittenContactFields,
-  excluded: SyncField[],
+  written: SyncField[],
 ): WrittenContactFields {
-  const keep = (field: SyncField) => excluded.includes(field)
+  const keep = (field: SyncField) => !written.includes(field)
   return {
     birthday: keep('birthday') ? (previous?.birthday ?? null) : current.birthday,
     events: keep('events') ? (previous?.events ?? []) : current.events,
@@ -198,9 +221,10 @@ export function planContactUpdate(
   remote: RemoteContactFields,
   previous: WrittenContactFields | undefined,
   current: WrittenContactFields,
-  excluded: SyncField[] = [],
+  fields: SyncField[],
 ): ContactUpdate | null {
   const update: ContactUpdate = { updatePersonFields: [] }
+  const excluded = allSyncFields.filter((field) => !fields.includes(field))
 
   if (!excluded.includes('name') && current.name?.givenName) {
     const remoteName = remote.name ?? {}
@@ -209,7 +233,13 @@ export function planContactUpdate(
       (remoteName.familyName ?? '') !== (current.name.familyName ?? '')
     ) {
       update.updatePersonFields.push('names')
-      update.names = [{ givenName: current.name.givenName, familyName: current.name.familyName }]
+      update.names = [
+        {
+          preserved: remoteName.preserved,
+          givenName: current.name.givenName,
+          familyName: current.name.familyName,
+        },
+      ]
     }
   }
   if (!excluded.includes('phones') && current.phones) {
@@ -273,6 +303,7 @@ export function enqueueSync(
   kind: 'create' | 'update',
   now: number,
   id: () => string,
+  fields: SyncField[] = [],
 ): KindyData['syncQueue'] {
   // A pending create already carries the latest values when it runs.
   if (kind === 'update' && queue.some((op) => op.personId === personId && op.kind === 'create')) {
@@ -282,9 +313,19 @@ export function enqueueSync(
   if (existing) {
     return queue.map((op) =>
       op === existing
-        ? { ...op, state: 'pending', attempts: 0, lastError: undefined, updatedAt: now }
+        ? {
+            ...op,
+            fields: [...new Set([...(op.fields ?? []), ...fields])],
+            state: 'pending',
+            attempts: 0,
+            lastError: undefined,
+            updatedAt: now,
+          }
         : op,
     )
   }
-  return [...queue, { id: id(), personId, kind, state: 'pending', attempts: 0, updatedAt: now }]
+  return [
+    ...queue,
+    { id: id(), personId, kind, fields, state: 'pending', attempts: 0, updatedAt: now },
+  ]
 }

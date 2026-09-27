@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ChevronRight, Plus, Search, Star } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -8,7 +8,6 @@ import AddPersonDialog from '@/components/AddPersonDialog.vue'
 import GoogleContactsDialog from '@/components/GoogleContactsDialog.vue'
 import PersonAvatar from '@/components/PersonAvatar.vue'
 import ViewHeader from '@/components/ViewHeader.vue'
-import { normalizeText } from '@/domain/duplicates'
 import { formatPartialDate } from '@/domain/dates'
 import type { Person } from '@/domain/model'
 import { useKindyStore } from '@/stores/kindy'
@@ -29,8 +28,15 @@ const filter = ref<'all' | 'favorites' | string>(
 const showAddPerson = ref(false)
 const showGoogleContacts = ref(route.query.import === 'google')
 
+/** Same search as on the start page: names, details, notes and circles. */
+const matchingIds = ref<Set<string>>()
+watch(query, async (value) => {
+  matchingIds.value = value.trim()
+    ? new Set((await store.search(value)).map((person) => person.id))
+    : undefined
+})
+
 const filteredPeople = computed(() => {
-  const normalizedQuery = normalizeText(query.value)
   const memberships = store.data?.memberships ?? []
   return store.people.filter((person) => {
     const matchesFilter =
@@ -39,12 +45,7 @@ const filteredPeople = computed(() => {
       memberships.some(
         (membership) => membership.circleId === filter.value && membership.personId === person.id,
       )
-    const searchable = normalizeText(
-      [person.displayName, person.nickname, ...person.details.map((item) => item.value)]
-        .filter(Boolean)
-        .join(' '),
-    )
-    return matchesFilter && (!normalizedQuery || searchable.includes(normalizedQuery))
+    return matchesFilter && (!matchingIds.value || matchingIds.value.has(person.id))
   })
 })
 
@@ -96,7 +97,7 @@ async function importGoogleContacts(
       <input v-model="query" type="search" :placeholder="$t('people.searchPlaceholder')" />
     </label>
 
-    <div class="filter-row" aria-label="Filters">
+    <div class="filter-row" role="group" :aria-label="$t('people.filters')">
       <button class="chip" :class="{ 'chip--active': filter === 'all' }" @click="filter = 'all'">
         {{ $t('people.all') }}
       </button>

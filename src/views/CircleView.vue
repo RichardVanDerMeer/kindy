@@ -8,6 +8,7 @@ import CircleEditDialog from '@/components/CircleEditDialog.vue'
 import { circleIcon } from '@/components/circleIcons'
 import PersonAvatar from '@/components/PersonAvatar.vue'
 import PersonPicker from '@/components/PersonPicker.vue'
+import { useImageFallback } from '@/composables/imageFallback'
 import type { Circle } from '@/domain/model'
 import { useKindyStore } from '@/stores/kindy'
 
@@ -19,6 +20,9 @@ const showMembers = ref(false)
 const memberSelection = ref<string[]>([])
 
 const circle = computed(() => store.circles.find((candidate) => candidate.id === props.id))
+const { src: backgroundSrc, onError: onBackgroundError } = useImageFallback(
+  () => circle.value?.backgroundImageRef,
+)
 
 /** Favourites first, then alphabetical; the user themselves goes last. */
 const members = computed(() => {
@@ -89,16 +93,14 @@ async function saveCircle(updated: Circle): Promise<void> {
 
     <div
       class="circle-hero"
-      :class="[
-        `surface--${circle.colorToken}`,
-        { 'circle-card--image': circle.backgroundImageRef },
-      ]"
+      :class="[`surface--${circle.colorToken}`, { 'circle-card--image': backgroundSrc }]"
     >
       <img
-        v-if="circle.backgroundImageRef"
+        v-if="backgroundSrc"
         class="circle-card__image"
-        :src="circle.backgroundImageRef"
+        :src="backgroundSrc"
         alt=""
+        @error="onBackgroundError"
       />
       <span class="circle-card__icon" aria-hidden="true">
         <component :is="circleIcon(circle.iconKey)" :size="26" />

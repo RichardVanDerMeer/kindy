@@ -5,12 +5,18 @@ import {
   Bell,
   BriefcaseBusiness,
   Cake,
+  CalendarClock,
   CalendarDays,
+  CalendarPlus,
   ChevronRight,
   Flower2,
   Heart,
+  HeartCrack,
+  Link2,
   Mail,
+  MapPin,
   MessageCircle,
+  Navigation,
   NotebookPen,
   CloudOff,
   Pencil,
@@ -25,7 +31,9 @@ import {
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
+import AddAgendaItemDialog from '@/components/AddAgendaItemDialog.vue'
 import AddConnectionDialog, { type NewPersonInput } from '@/components/AddConnectionDialog.vue'
+import AgendaCard from '@/components/AgendaCard.vue'
 import AddNoteDialog from '@/components/AddNoteDialog.vue'
 import CirclePickerDialog from '@/components/CirclePickerDialog.vue'
 import AppointmentsCard from '@/components/AppointmentsCard.vue'
@@ -35,8 +43,11 @@ import WishlistCard from '@/components/WishlistCard.vue'
 import PersonAvatar from '@/components/PersonAvatar.vue'
 import RelationshipDiagram from '@/components/RelationshipDiagram.vue'
 import { calendarDay } from '@/domain/agenda'
+import type { AgendaDraft } from '@/domain/agendaDraft'
 import { inferGender, relationshipViewFor, siblingIds } from '@/domain/connections'
 import { ageBetween, formatPartialDate } from '@/domain/dates'
+import { safeWebUrl } from '@/domain/links'
+import { mapsUrl } from '@/domain/maps'
 import type { PartialDate, Person, RelationshipRole, SyncField } from '@/domain/model'
 import { connectedPersonId } from '@/domain/relationships'
 import { personTimeline, type TimelineEntry } from '@/domain/timeline'
@@ -53,6 +64,10 @@ const showCirclePicker = ref(false)
 const showAddConnection = ref(false)
 const showAddNote = ref(false)
 const showEdit = ref(false)
+const showAddDate = ref(false)
+const addDateError = ref<string>()
+/** Removing a date takes two taps: the first asks for confirmation. */
+const confirmingRemoval = ref<string>()
 
 /** For linked people: fields the user chose to keep in Kindy only. */
 function localOnly(field: SyncField): boolean {
@@ -133,6 +148,12 @@ const ageAtDeath = computed(() => {
   if (!person.value?.birthDate || !person.value.deathDate) return null
   return ageBetween(person.value.birthDate, person.value.deathDate)
 })
+const birthdayToday = computed(() => {
+  const date = person.value?.birthDate
+  if (!date || person.value?.isDeceased) return false
+  const today = calendarDay(new Date())
+  return date.month === today.month && date.day === today.day
+})
 const age = computed(() => {
   if (!person.value?.birthDate || person.value.isDeceased) return null
   return ageBetween(person.value.birthDate, calendarDay(new Date()))
@@ -144,11 +165,11 @@ const phones = computed(
 const emails = computed(
   () => person.value?.contactPoints.filter((point) => point.kind === 'email') ?? [],
 )
-const otherContacts = computed(
-  () =>
-    person.value?.contactPoints.filter(
-      (point) => point.kind === 'address' || point.kind === 'url',
-    ) ?? [],
+const addresses = computed(
+  () => person.value?.contactPoints.filter((point) => point.kind === 'address') ?? [],
+)
+const links = computed(
+  () => person.value?.contactPoints.filter((point) => point.kind === 'url') ?? [],
 )
 
 /** Wedding days this person shares, with the partner(s) on the other side. */
@@ -176,6 +197,45 @@ const hasDetails = computed(
 const timeline = computed(() =>
   store.data ? personTimeline(props.id, store.data) : { dated: [], undated: [] },
 )
+/** What is coming for this person: birthday (and age), anniversaries, appointments, memos. */
+const upcomingForPerson = computed(() =>
+  store.agenda
+    .filter((item) => item.daysFromToday >= 0 && item.personIds.includes(props.id))
+    .slice(0, 6),
+)
+/** The life story so far; future moments are shown under "coming up" instead. */
+const pastTimeline = computed(() => {
+  const today = calendarDay(new Date())
+  const todayKey = today.year * 10_000 + today.month * 100 + today.day
+  return timeline.value.dated.filter(
+    (entry) => (entry.date.year ?? 0) * 10_000 + entry.date.month * 100 + entry.date.day < todayKey,
+  )
+})
+const removableKinds = new Set(['married', 'anniversary', 'divorced', 'custom'])
+const syncedPersonIds = computed(() =>
+  store.googleWriteBack
+    ? (store.data?.externalIdentities ?? []).map((identity) => identity.personId)
+    : [],
+)
+
+async function removeTimelineEvent(entry: TimelineEntry): Promise<void> {
+  if (confirmingRemoval.value !== entry.id) {
+    confirmingRemoval.value = entry.id
+    return
+  }
+  confirmingRemoval.value = undefined
+  await store.removeEvent(entry.id)
+}
+
+async function addDate(draft: AgendaDraft): Promise<void> {
+  addDateError.value = undefined
+  try {
+    await store.addFromDraft(draft)
+    showAddDate.value = false
+  } catch {
+    addDateError.value = t('agendaAdd.appointment.failed')
+  }
+}
 
 function formatDate(date: PartialDate): string {
   return formatPartialDate(date, locale.value)
@@ -200,6 +260,8 @@ function timelineTitle(entry: TimelineEntry): string {
       return t('timeline.died')
     case 'married':
       return names ? t('timeline.marriedTo', { names }) : t('timeline.married')
+    case 'divorced':
+      return names ? t('timeline.divorcedFrom', { names }) : t('timeline.divorced')
     default:
       return entry.title ?? t(`timeline.${entry.kind}`)
   }
@@ -214,15 +276,23 @@ function timelineIcon(entry: TimelineEntry) {
       return Heart
     case 'died':
       return Flower2
+    case 'divorced':
+      return HeartCrack
     case 'memo':
       return Bell
+    case 'appointment':
+      return CalendarClock
+    case 'custom':
+      return CalendarPlus
     default:
       return CalendarDays
   }
 }
 
 function timelinePeople(entry: TimelineEntry): Person[] {
-  if (entry.kind !== 'married' && entry.kind !== 'anniversary') return []
+  if (entry.kind !== 'married' && entry.kind !== 'anniversary' && entry.kind !== 'divorced') {
+    return []
+  }
   return [props.id, ...entry.otherPersonIds]
     .map((id) => store.personById(id))
     .filter((candidate): candidate is Person => Boolean(candidate))
@@ -301,6 +371,9 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
             <span>{{ formatDate(person.deathDate) }}</span>
           </template>
         </div>
+        <span v-if="birthdayToday" class="self-pill self-pill--birthday">
+          <Cake :size="15" /> {{ $t('profile.birthdayToday') }}
+        </span>
         <span v-else-if="person.isSelf" class="self-pill">
           <UserRoundCheck :size="15" /> {{ $t('profile.thisIsYou') }}
         </span>
@@ -328,7 +401,7 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
       </div>
     </div>
 
-    <nav class="profile-tabs" aria-label="Profile sections">
+    <nav class="profile-tabs" :aria-label="$t('profile.sections')">
       <button
         v-for="tab in ['overview', 'notes', 'connections', 'timeline'] as const"
         :key="tab"
@@ -457,10 +530,37 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
           </strong>
         </div>
 
-        <div v-for="point in otherContacts" :key="point.id" class="detail-row">
-          <Heart :size="20" />
+        <div v-for="point in addresses" :key="point.id" class="detail-row detail-row--contact">
+          <MapPin :size="20" />
+          <span>{{ $t('profile.address') }}</span>
+          <strong class="detail-with-actions">
+            <a :href="mapsUrl(point.value)" target="_blank" rel="noopener">{{ point.value }}</a>
+            <span class="detail-actions">
+              <a
+                class="contact-action"
+                :href="mapsUrl(point.value)"
+                target="_blank"
+                rel="noopener"
+                :aria-label="$t('profile.openInMaps')"
+                ><Navigation :size="17"
+              /></a>
+            </span>
+          </strong>
+        </div>
+
+        <div v-for="point in links" :key="point.id" class="detail-row">
+          <Link2 :size="20" />
           <span>{{ point.label }}</span>
-          <strong>{{ point.value }}</strong>
+          <strong>
+            <a
+              v-if="safeWebUrl(point.value)"
+              :href="safeWebUrl(point.value)"
+              target="_blank"
+              rel="noopener"
+              >{{ point.value }}</a
+            >
+            <template v-else>{{ point.value }}</template>
+          </strong>
         </div>
 
         <div v-for="detail in person.details" :key="detail.id" class="detail-row">
@@ -581,9 +681,21 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
     </div>
 
     <div v-else class="profile-content">
-      <ol v-if="timeline.dated.length" class="life-timeline">
+      <button class="button button--ghost settings-wide-button" @click="showAddDate = true">
+        <CalendarPlus :size="18" /> {{ $t('timeline.addDate') }}
+      </button>
+
+      <template v-if="upcomingForPerson.length">
+        <h2 class="section-title">{{ $t('home.upcoming') }}</h2>
+        <div class="timeline-list">
+          <AgendaCard v-for="item in upcomingForPerson" :key="item.id" :item="item" compact />
+        </div>
+        <h2 class="section-title timeline-past-title">{{ $t('timeline.lifeSoFar') }}</h2>
+      </template>
+
+      <ol v-if="pastTimeline.length" class="life-timeline">
         <li
-          v-for="entry in timeline.dated"
+          v-for="entry in pastTimeline"
           :key="entry.id"
           class="life-timeline__entry"
           :class="`life-timeline__entry--${entry.kind}`"
@@ -592,6 +704,18 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
             <component :is="timelineIcon(entry)" :size="15" />
           </span>
           <div class="life-timeline__body card">
+            <button
+              v-if="removableKinds.has(entry.kind)"
+              class="life-timeline__remove"
+              :class="{ 'life-timeline__remove--confirm': confirmingRemoval === entry.id }"
+              :aria-label="$t('timeline.remove')"
+              @click="removeTimelineEvent(entry)"
+            >
+              <template v-if="confirmingRemoval === entry.id">{{
+                $t('timeline.confirmRemove')
+              }}</template>
+              <Trash2 v-else :size="15" />
+            </button>
             <time>{{ formatDate(entry.date) }}</time>
             <strong>{{ timelineTitle(entry) }}</strong>
             <span v-if="timelinePeople(entry).length > 1" class="avatar-pair">
@@ -618,7 +742,10 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
           <strong>{{ timelineTitle(entry) }}</strong>
         </article>
       </template>
-      <p v-if="!timeline.dated.length && !timeline.undated.length" class="empty-copy">
+      <p
+        v-if="!pastTimeline.length && !timeline.undated.length && !upcomingForPerson.length"
+        class="empty-copy"
+      >
         {{ $t('timeline.empty') }}
       </p>
     </div>
@@ -639,6 +766,16 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
       :error="connectionError"
       @close="showAddConnection = false"
       @save="addConnection"
+    />
+    <AddAgendaItemDialog
+      :open="showAddDate"
+      :candidates="store.people"
+      :synced-person-ids="syncedPersonIds"
+      :kinds="['birthday', 'wedding', 'divorce', 'death', 'custom', 'memo', 'appointment']"
+      :initial-person-ids="[person.id]"
+      :error="addDateError"
+      @close="showAddDate = false"
+      @save="addDate"
     />
     <EditPersonDialog
       :open="showEdit"

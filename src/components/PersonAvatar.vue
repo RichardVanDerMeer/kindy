@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import { useImageFallback } from '@/composables/imageFallback'
+
 const props = withDefaults(
   defineProps<{
     name: string
@@ -21,6 +23,9 @@ const initials = computed(
       .join('') || props.name.charAt(0).toLocaleUpperCase(),
 )
 
+/** A photo that cannot load (moved, or remote while offline) falls back to initials. */
+const { src: photoSrc, onError: onPhotoError } = useImageFallback(() => props.photoRef)
+
 /** A stable tone per name, so the same person keeps the same colour everywhere. */
 const toneClass = computed(() => {
   let hash = 0
@@ -36,7 +41,7 @@ const toneClass = computed(() => {
     role="img"
     :aria-label="name"
   >
-    <img v-if="photoRef" :src="photoRef" alt="" />
+    <img v-if="photoSrc" :src="photoSrc" alt="" @error="onPhotoError" />
     <span v-else aria-hidden="true">{{ initials }}</span>
   </span>
 </template>

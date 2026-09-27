@@ -2,10 +2,12 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { buildAgenda, calendarDay } from '@/domain/agenda'
+import type { AgendaDraft } from '@/domain/agendaDraft'
 import { createBackup, isWorthBackingUp, readBackup } from '@/domain/backup'
 import { sameOccurrence, suggestCalendarLinks, type DeviceCalendarEvent } from '@/domain/calendar'
 import { createConnection } from '@/domain/connections'
 import { enqueueSync, importedContactDates, managedContactFields } from '@/domain/contactSync'
+import { safeWebUrl } from '@/domain/links'
 import {
   KINDY_SCHEMA_VERSION,
   type Circle,
@@ -61,7 +63,30 @@ export interface PersonEdit {
   birthDate?: PartialDate
   phones: string[]
   emails: string[]
+  addresses: string[]
   photoRef?: string
+  isDeceased: boolean
+  deathDate?: PartialDate
+  memorialNote?: string
+}
+
+export interface AppointmentEdit {
+  title: string
+  startsAt: number
+  endsAt: number
+  allDay: boolean
+  location?: string
+  personIds: string[]
+}
+
+const CALENDAR_PROMPT_KEY = 'kindy.calendar.promptDismissed'
+
+function readCalendarPromptDismissed(): boolean {
+  try {
+    return localStorage.getItem(CALENDAR_PROMPT_KEY) === 'yes'
+  } catch {
+    return false
+  }
 }
 
 export interface NewAppointment {
@@ -117,6 +142,7 @@ export const useKindyStore = defineStore('kindy', () => {
   const calendarEvents = ref<DeviceCalendarEvent[]>([])
   const calendars = ref<DeviceCalendar[]>([])
   const defaultCalendarId = ref(readDefaultCalendar())
+  const calendarPromptDismissed = ref(readCalendarPromptDismissed())
 
   const people = computed(() =>
     (data.value?.people ?? [])
@@ -142,9 +168,9 @@ export const useKindyStore = defineStore('kindy', () => {
       ? suggestCalendarLinks(calendarEvents.value, people.value, data.value.calendarLinks)
       : [],
   )
-  /** Everything from a week ago until a year ahead; views narrow it further. */
+  /** From a week ago up to (not including) the same day next year; views narrow it further. */
   const agenda = computed(() =>
-    data.value ? buildAgenda(data.value, today.value, { daysBack: 7, daysAhead: 365 }) : [],
+    data.value ? buildAgenda(data.value, today.value, { daysBack: 7, daysAhead: 364 }) : [],
   )
 
   async function initialize(): Promise<void> {
@@ -247,13 +273,20 @@ export const useKindyStore = defineStore('kindy', () => {
     )
   }
 
-  /** Queues the managed fields of linked people for Google, when write-back is on. */
-  function queueContactUpdates(draft: KindyData, personIds: string[]): void {
-    if (!googleWriteBack.value) return
+  /**
+   * Queues the changed fields of linked people for Google. With write-back off
+   * they wait in the queue and are sent once it is switched on again.
+   */
+  function queueContactUpdates(draft: KindyData, personIds: string[], fields: SyncField[]): void {
     for (const personId of personIds) {
       if (!isLinked(draft, personId)) continue
-      draft.syncQueue = enqueueSync(draft.syncQueue, personId, 'update', Date.now(), () =>
-        crypto.randomUUID(),
+      draft.syncQueue = enqueueSync(
+        draft.syncQueue,
+        personId,
+        'update',
+        Date.now(),
+        () => crypto.randomUUID(),
+        fields,
       )
     }
   }
@@ -274,6 +307,7 @@ export const useKindyStore = defineStore('kindy', () => {
         repository,
         gateway: getGoogleContactsGateway(),
         labels: { death: i18n.global.t('contactSync.deathEvent') },
+        onlyCreates: !googleWriteBack.value,
       })
       await refresh()
     } catch {
@@ -311,15 +345,8 @@ export const useKindyStore = defineStore('kindy', () => {
     } catch {
       // Applies for this session.
     }
-    if (!enabled) return
-    // Changes made while write-back was off are sent now.
-    await mutate((draft) =>
-      queueContactUpdates(
-        draft,
-        draft.externalIdentities.map((identity) => identity.personId),
-      ),
-    )
-    void syncGoogle()
+    // Changes made while write-back was off waited in the queue and are sent now.
+    if (enabled) void syncGoogle()
   }
 
   async function lock(): Promise<void> {
@@ -599,7 +626,7 @@ export const useKindyStore = defineStore('kindy', () => {
       if (!person) return
       person.birthDate = { ...birthDate }
       person.updatedAt = Date.now()
-      queueContactUpdates(draft, [personId])
+      queueContactUpdates(draft, [personId], ['birthday'])
     })
     void syncGoogle()
   }
@@ -611,7 +638,7 @@ export const useKindyStore = defineStore('kindy', () => {
       person.isDeceased = true
       person.deathDate = { ...deathDate }
       person.updatedAt = Date.now()
-      queueContactUpdates(draft, [personId])
+      queueContactUpdates(draft, [personId], ['events'])
     })
     void syncGoogle()
   }
@@ -626,7 +653,7 @@ export const useKindyStore = defineStore('kindy', () => {
         personIds: [...personIds],
         source: 'kindy',
       })
-      queueContactUpdates(draft, personIds)
+      queueContactUpdates(draft, personIds, ['events'])
     })
     void syncGoogle()
   }
@@ -652,6 +679,7 @@ export const useKindyStore = defineStore('kindy', () => {
       const familyName = edit.familyName?.trim() || undefined
       const phones = edit.phones.map((value) => value.trim()).filter(Boolean)
       const emails = edit.emails.map((value) => value.trim()).filter(Boolean)
+      const addresses = edit.addresses.map((value) => value.trim()).filter(Boolean)
 
       const changed: SyncField[] = []
       if (givenName !== (person.givenName ?? '') || familyName !== person.familyName) {
@@ -661,6 +689,13 @@ export const useKindyStore = defineStore('kindy', () => {
       if (!sameList(emails, points(person, 'email'))) changed.push('emails')
       if (!samePartialDate(edit.birthDate, person.birthDate)) changed.push('birthday')
       if (edit.photoRef !== person.photoRef) changed.push('photo')
+      // A death is written to Google as an event.
+      if (
+        edit.isDeceased !== person.isDeceased ||
+        (edit.isDeceased && !samePartialDate(edit.deathDate, person.deathDate))
+      ) {
+        changed.push('events')
+      }
 
       person.givenName = givenName
       person.familyName = familyName
@@ -668,10 +703,17 @@ export const useKindyStore = defineStore('kindy', () => {
       person.nickname = edit.nickname?.trim() || undefined
       person.birthDate = edit.birthDate ? { ...edit.birthDate } : undefined
       person.photoRef = edit.photoRef
+      person.isDeceased = edit.isDeceased
+      person.deathDate = edit.isDeceased && edit.deathDate ? { ...edit.deathDate } : undefined
+      person.memorialNote = edit.isDeceased ? edit.memorialNote?.trim() || undefined : undefined
+      // Someone who has died is no favourite on the home screen any more.
+      if (edit.isDeceased) person.isFavorite = false
       person.contactPoints = [
         ...updatedPoints(person, 'phone', phones),
         ...updatedPoints(person, 'email', emails),
-        ...person.contactPoints.filter((point) => point.kind !== 'phone' && point.kind !== 'email'),
+        // Addresses stay in Kindy; they are not written to Google.
+        ...updatedPoints(person, 'address', addresses),
+        ...person.contactPoints.filter((point) => point.kind === 'url'),
       ]
       person.updatedAt = Date.now()
 
@@ -682,7 +724,7 @@ export const useKindyStore = defineStore('kindy', () => {
         else exclusions.add(field)
       }
       person.syncExclusions = exclusions.size ? [...exclusions] : undefined
-      if (options.syncToGoogle) queueContactUpdates(draft, [personId])
+      if (options.syncToGoogle) queueContactUpdates(draft, [personId], changed)
     })
     void syncGoogle()
   }
@@ -690,7 +732,7 @@ export const useKindyStore = defineStore('kindy', () => {
   /** Keeps ids and labels of numbers that stayed, so Google keeps its labels too. */
   function updatedPoints(
     person: Person,
-    kind: 'phone' | 'email',
+    kind: 'phone' | 'email' | 'address',
     values: string[],
   ): ContactPoint[] {
     const existing = person.contactPoints.filter((point) => point.kind === kind)
@@ -731,7 +773,7 @@ export const useKindyStore = defineStore('kindy', () => {
       const values = {
         personId: input.personId,
         title: input.title.trim(),
-        url: input.url?.trim() || undefined,
+        url: safeWebUrl(input.url),
         note: input.note?.trim() || undefined,
         status: input.status,
       }
@@ -845,6 +887,104 @@ export const useKindyStore = defineStore('kindy', () => {
     })
   }
 
+  function dismissCalendarPrompt(): void {
+    calendarPromptDismissed.value = true
+    try {
+      localStorage.setItem(CALENDAR_PROMPT_KEY, 'yes')
+    } catch {
+      // Applies for this session.
+    }
+  }
+
+  /** Links a calendar appointment to a person by hand; others already linked stay linked. */
+  async function linkEventToPerson(event: DeviceCalendarEvent, personId: string): Promise<void> {
+    await mutate((draft) => {
+      const existing = draft.calendarLinks.find((link) => sameOccurrence(link, event))
+      if (existing) {
+        existing.status = 'linked'
+        if (!existing.personIds.includes(personId)) existing.personIds.push(personId)
+        return
+      }
+      draft.calendarLinks.push({
+        id: crypto.randomUUID(),
+        eventId: event.id,
+        calendarId: event.calendarId,
+        title: event.title,
+        startsAt: event.startsAt,
+        endsAt: event.endsAt,
+        allDay: event.allDay,
+        location: event.location,
+        personIds: [personId],
+        status: 'linked',
+        createdBy: 'calendar',
+        createdAt: Date.now(),
+      })
+    })
+  }
+
+  /**
+   * Edits a linked appointment. Everyone can change who it is with; title,
+   * time and place change only for appointments Kindy put in the calendar,
+   * and then in the phone's calendar too. Other appointments are not touched.
+   */
+  async function updateAppointment(linkId: string, input: AppointmentEdit): Promise<void> {
+    const link = data.value?.calendarLinks.find((candidate) => candidate.id === linkId)
+    if (!link) return
+    const ownAppointment = link.createdBy === 'kindy'
+    const details = {
+      title: input.title.trim(),
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+      allDay: input.allDay,
+      location: input.location?.trim() || undefined,
+    }
+    const detailsChanged =
+      details.title !== link.title ||
+      details.startsAt !== link.startsAt ||
+      details.endsAt !== link.endsAt ||
+      details.allDay !== link.allDay ||
+      details.location !== link.location
+    if (ownAppointment && detailsChanged) {
+      await getDeviceCalendarGateway().updateEvent(link.eventId, details)
+    }
+    await mutate((draft) => {
+      const stored = draft.calendarLinks.find((candidate) => candidate.id === linkId)
+      if (!stored) return
+      stored.personIds = [...input.personIds]
+      if (ownAppointment) Object.assign(stored, details)
+    })
+    if (ownAppointment && detailsChanged) await refreshCalendar()
+  }
+
+  async function updateMemo(
+    occurrenceId: string,
+    input: { text: string; date: string; personId: string },
+  ): Promise<void> {
+    const localDateTime = `${input.date}T09:00:00`
+    await mutate((draft) => {
+      const occurrence = draft.reminderOccurrences.find((item) => item.id === occurrenceId)
+      const reminder = draft.reminders.find((item) => item.id === occurrence?.reminderId)
+      if (!occurrence || !reminder) return
+      reminder.title = input.text.trim()
+      reminder.personId = input.personId
+      reminder.localDateTime = localDateTime
+      occurrence.dueAt = new Date(localDateTime).getTime()
+      occurrence.snoozedUntil = undefined
+      occurrence.state = 'scheduled'
+    })
+  }
+
+  async function deleteMemo(occurrenceId: string): Promise<void> {
+    await mutate((draft) => {
+      const occurrence = draft.reminderOccurrences.find((item) => item.id === occurrenceId)
+      if (!occurrence) return
+      draft.reminderOccurrences = draft.reminderOccurrences.filter(
+        (item) => item.reminderId !== occurrence.reminderId,
+      )
+      draft.reminders = draft.reminders.filter((item) => item.id !== occurrence.reminderId)
+    })
+  }
+
   async function unlinkCalendarEvent(linkId: string): Promise<void> {
     await mutate((draft) => {
       draft.calendarLinks = draft.calendarLinks.filter((link) => link.id !== linkId)
@@ -888,6 +1028,70 @@ export const useKindyStore = defineStore('kindy', () => {
       })
     })
     await refreshCalendar()
+  }
+
+  /** Divorces and dates of the user's own choosing; they stay in Kindy. */
+  async function addLifeEvent(input: {
+    type: 'divorce' | 'custom'
+    personIds: string[]
+    date: PartialDate
+    title?: string
+  }): Promise<void> {
+    await mutate((draft) => {
+      draft.events.push({
+        id: crypto.randomUUID(),
+        type: input.type,
+        title: input.title?.trim() || input.type,
+        date: { ...input.date },
+        personIds: [...input.personIds],
+        source: 'kindy',
+      })
+    })
+  }
+
+  /** Removes a date. Linked contacts get the change too, when it is one Google holds. */
+  async function removeEvent(eventId: string): Promise<void> {
+    await mutate((draft) => {
+      const event = draft.events.find((candidate) => candidate.id === eventId)
+      if (!event) return
+      draft.events = draft.events.filter((candidate) => candidate.id !== eventId)
+      if (event.type === 'wedding-anniversary' || event.type === 'anniversary') {
+        queueContactUpdates(draft, event.personIds, ['events'])
+      }
+    })
+    void syncGoogle()
+  }
+
+  async function completeMemo(occurrenceId: string): Promise<void> {
+    await mutate((draft) => {
+      const occurrence = draft.reminderOccurrences.find((item) => item.id === occurrenceId)
+      if (occurrence) occurrence.state = 'completed'
+    })
+  }
+
+  /** Saves anything added from Upcoming or a timeline. */
+  async function addFromDraft(draft: AgendaDraft): Promise<void> {
+    switch (draft.kind) {
+      case 'appointment':
+        return createAppointment(draft)
+      case 'memo':
+        return addMemo(draft)
+      case 'birthday':
+        return setBirthDate(draft.personId, draft.date)
+      case 'death':
+        return markDeceased(draft.personId, draft.date)
+      case 'wedding':
+        return addWeddingAnniversary(draft.personIds, draft.date)
+      case 'divorce':
+        return addLifeEvent({ type: 'divorce', personIds: draft.personIds, date: draft.date })
+      case 'custom':
+        return addLifeEvent({
+          type: 'custom',
+          personIds: draft.personIds,
+          date: draft.date,
+          title: draft.title,
+        })
+    }
   }
 
   async function resetDemoData(): Promise<void> {
@@ -945,6 +1149,7 @@ export const useKindyStore = defineStore('kindy', () => {
     calendars,
     defaultCalendarId,
     calendarSuggestions,
+    calendarPromptDismissed,
     initialize,
     refresh,
     lock,
@@ -983,7 +1188,16 @@ export const useKindyStore = defineStore('kindy', () => {
     linkCalendarEvent,
     ignoreCalendarEvent,
     unlinkCalendarEvent,
+    dismissCalendarPrompt,
+    linkEventToPerson,
+    updateAppointment,
+    updateMemo,
+    deleteMemo,
     createAppointment,
+    addLifeEvent,
+    removeEvent,
+    completeMemo,
+    addFromDraft,
     resetDemoData,
     importExternalContacts,
     search,

@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { Check, ImagePlus, Trash2 } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 
+import { useImageFallback } from '@/composables/imageFallback'
 import { readImageFile } from '@/composables/imageFile'
 import type { Circle } from '@/domain/model'
 
@@ -21,6 +22,9 @@ const emit = defineEmits<{ close: []; save: [circle: Circle] }>()
 const { t } = useI18n()
 const draft = ref<Circle>(blank())
 const presetGroups = ['general', 'sport'] as const
+const { src: previewSrc, onError: onPreviewError } = useImageFallback(
+  () => draft.value.backgroundImageRef,
+)
 const fileInput = ref<HTMLInputElement>()
 
 function blank(): Circle {
@@ -75,12 +79,9 @@ function submit(): void {
 
         <div
           class="circle-preview"
-          :class="[
-            `surface--${draft.colorToken}`,
-            { 'circle-card--image': draft.backgroundImageRef },
-          ]"
+          :class="[`surface--${draft.colorToken}`, { 'circle-card--image': previewSrc }]"
         >
-          <img v-if="draft.backgroundImageRef" :src="draft.backgroundImageRef" alt="" />
+          <img v-if="previewSrc" :src="previewSrc" alt="" @error="onPreviewError" />
           <span class="circle-card__icon">
             <component :is="circleIcon(draft.iconKey)" :size="22" />
           </span>

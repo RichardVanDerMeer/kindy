@@ -1,4 +1,5 @@
 import {
+  fieldsToWrite,
   managedContactFields,
   planContactUpdate,
   uploadablePhoto,
@@ -43,19 +44,24 @@ export async function runContactSync(deps: {
   repository: Pick<KindyRepository, 'getData' | 'replaceData'>
   gateway: ExternalContactsGateway
   labels: { death: string }
+  /** With write-back off, only explicit "save in Google" requests run. */
+  onlyCreates?: boolean
   now?: () => number
   newId?: () => string
 }): Promise<ContactSyncResult> {
   const now = deps.now ?? Date.now
   const newId = deps.newId ?? (() => crypto.randomUUID())
   const snapshot = await deps.repository.getData()
-  if (!snapshot.syncQueue.length) return { done: 0, failed: 0, waiting: false }
+  const queue = snapshot.syncQueue.filter(
+    (operation) => !deps.onlyCreates || operation.kind === 'create',
+  )
+  if (!queue.length) return { done: 0, failed: 0, waiting: false }
 
   const connection = await deps.gateway.restore()
   if (!connection) return { done: 0, failed: 0, waiting: true }
 
   const outcomes: Outcome[] = []
-  for (const operation of snapshot.syncQueue) {
+  for (const operation of queue) {
     try {
       const person = snapshot.people.find((candidate) => candidate.id === operation.personId)
       if (!person || person.deletedAt) {
@@ -63,18 +69,21 @@ export async function runContactSync(deps: {
         continue
       }
       const current = managedContactFields(person.id, snapshot, deps.labels)
-      const excluded = person.syncExclusions ?? []
       const identity = linkedIdentity(snapshot, person.id)
-      const photo = excluded.includes('photo') ? undefined : uploadablePhoto(person.photoRef)
+      const fields = fieldsToWrite(
+        identity ? { ...operation, kind: 'update' } : operation,
+        person.syncExclusions ?? [],
+      )
+      const photo = fields.includes('photo') ? uploadablePhoto(person.photoRef) : undefined
 
       if (!identity && operation.kind === 'create') {
         const created = await deps.gateway.createContact({
           givenName: person.givenName ?? person.displayName,
           familyName: person.familyName,
-          birthday: current.birthday,
-          events: current.events,
-          phones: excluded.includes('phones') ? [] : values(person, 'phone'),
-          emails: excluded.includes('emails') ? [] : values(person, 'email'),
+          birthday: fields.includes('birthday') ? current.birthday : null,
+          events: fields.includes('events') ? current.events : [],
+          phones: fields.includes('phones') ? values(person, 'phone') : [],
+          emails: fields.includes('emails') ? values(person, 'email') : [],
         })
         if (photo) await deps.gateway.updateContactPhoto(created.resourceName, photo)
         outcomes.push({
@@ -88,7 +97,7 @@ export async function runContactSync(deps: {
             providerResourceId: created.resourceName,
             etag: created.etag,
             lastSyncedAt: now(),
-            writtenFields: writtenAfterSync(undefined, current, excluded),
+            writtenFields: writtenAfterSync(undefined, current, fields),
           },
         })
         continue
@@ -97,9 +106,14 @@ export async function runContactSync(deps: {
         outcomes.push({ operation, ok: true })
         continue
       }
+      // Contact ids belong to one Google account: never write them with another account's access.
+      if (identity.providerAccountId !== connection.providerAccountId) {
+        outcomes.push({ operation, ok: false, error: 'Linked to another Google account' })
+        continue
+      }
 
       const remote = await deps.gateway.getContactFields(identity.providerResourceId)
-      const plan = planContactUpdate(remote, identity.writtenFields, current, excluded)
+      const plan = planContactUpdate(remote, identity.writtenFields, current, fields)
       let etag = plan
         ? (await deps.gateway.updateContactFields(identity.providerResourceId, remote.etag, plan))
             .etag
@@ -114,7 +128,7 @@ export async function runContactSync(deps: {
           ...identity,
           etag,
           lastSyncedAt: now(),
-          writtenFields: writtenAfterSync(identity.writtenFields, current, excluded),
+          writtenFields: writtenAfterSync(identity.writtenFields, current, fields),
         },
       })
     } catch (error) {

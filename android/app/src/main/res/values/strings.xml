@@ -4,6 +4,7 @@
     <string name="title_activity_main">Kindy</string>
     <string name="package_name">nl.richardvandermeer.kindy</string>
     <string name="custom_url_scheme">nl.richardvandermeer.kindy</string>
-    <string name="widget_coming_up_description">Upcoming birthdays, anniversaries and reminders</string>
+    <string name="widget_coming_up_description">Upcoming birthdays, anniversaries and appointments</string>
+    <string name="widget_open_app">Open Kindy to fill this widget</string>
     <string name="widget_favorites_description">Favorite people in Kindy</string>
 </resources>

@@ -5,18 +5,22 @@ import {
   Cake,
   CalendarClock,
   CalendarHeart,
+  Check,
   Flower2,
   Gift,
   Heart,
   Mail,
   MessageCircle,
+  Pencil,
   Phone,
 } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
+import { describeAgendaItem, firstName, primaryPerson } from '@/composables/agendaText'
 import type { AgendaItem } from '@/domain/agenda'
 import type { Person } from '@/domain/model'
+import { useEditorsStore } from '@/stores/editors'
 import { useKindyStore } from '@/stores/kindy'
 
 import PersonAvatar from './PersonAvatar.vue'
@@ -26,6 +30,13 @@ const props = withDefaults(defineProps<{ item: AgendaItem; compact?: boolean }>(
 })
 
 const store = useKindyStore()
+const editors = useEditorsStore()
+const editable = computed(() => props.item.kind === 'reminder' || props.item.kind === 'appointment')
+
+function edit(): void {
+  if (props.item.kind === 'reminder') editors.editMemo(props.item.id)
+  else if (props.item.kind === 'appointment') editors.editAppointment(props.item.id)
+}
 const router = useRouter()
 const { t, locale } = useI18n()
 
@@ -34,8 +45,7 @@ const people = computed(() =>
     .map((id) => store.personById(id))
     .filter((person): person is Person => Boolean(person)),
 )
-/** The person to open and contact: skip the user themselves, e.g. on a shared wedding day. */
-const primary = computed(() => people.value.find((person) => !person.isSelf) ?? people.value[0])
+const primary = computed(() => primaryPerson(people.value))
 /** Wedding days, anniversaries and shared appointments show two people when known. */
 const couple = computed(() =>
   (props.item.kind === 'wedding-anniversary' ||
@@ -51,31 +61,9 @@ const openWishes = computed(() =>
     ? store.wishesFor(primary.value.id).filter((wish) => wish.status !== 'given').length
     : 0,
 )
-const firstName = (person: Person) => person.givenName ?? person.displayName
-
-const title = computed(() => {
-  const names = people.value.map(firstName).join(' & ')
-  return t(`upcoming.kinds.${props.item.kind}`, {
-    name: primary.value ? firstName(primary.value) : '',
-    names,
-    title: props.item.title ?? '',
-  })
-})
-
-const detail = computed(() => {
-  if (props.item.kind === 'reminder') return t('upcoming.details.reminder')
-  if (props.item.kind === 'appointment') {
-    const time = props.item.startsAt
-      ? new Intl.DateTimeFormat(locale.value, { hour: '2-digit', minute: '2-digit' }).format(
-          props.item.startsAt,
-        )
-      : t('calendar.allDay')
-    return [time, props.item.location].filter(Boolean).join(' · ')
-  }
-  if (!props.item.years) return ''
-  const key = `upcoming.details.${props.item.kind}`
-  return t(key, { count: props.item.years }, props.item.years)
-})
+const text = computed(() => describeAgendaItem(props.item, people.value, t, locale.value))
+const title = computed(() => text.value.title)
+const detail = computed(() => text.value.detail)
 
 const date = computed(() => new Date(`${props.item.date}T12:00:00`))
 const relativeDay = computed(() => {
@@ -169,7 +157,24 @@ function open(): void {
         <small v-if="detail">{{ detail }}</small>
       </span>
     </button>
-    <div v-if="!compact && (phone || email || openWishes)" class="agenda-card__actions">
+    <div v-if="!compact && (phone || email || openWishes || editable)" class="agenda-card__actions">
+      <button
+        v-if="item.kind === 'reminder'"
+        class="contact-action contact-action--done"
+        :aria-label="t('upcoming.markDone')"
+        @click="store.completeMemo(item.id)"
+      >
+        <Check :size="18" /> <span>{{ t('upcoming.done') }}</span>
+      </button>
+      <button
+        v-if="editable"
+        class="contact-action"
+        :class="{ 'contact-action--first': item.kind !== 'reminder' }"
+        :aria-label="t('editors.edit')"
+        @click="edit"
+      >
+        <Pencil :size="17" />
+      </button>
       <RouterLink
         v-if="openWishes && primary"
         class="contact-action contact-action--gift"

@@ -234,6 +234,10 @@ export class SqliteKindyRepository implements KindyRepository {
       id: String(row.id),
       personId: String(row.person_id),
       kind: String(row.kind) as SyncOperation['kind'],
+      fields:
+        row.fields_json == null
+          ? undefined
+          : (JSON.parse(String(row.fields_json)) as SyncOperation['fields']),
       state: String(row.state) as SyncOperation['state'],
       attempts: Number(row.attempts),
       lastError: optionalString(row.last_error),
@@ -548,11 +552,12 @@ export class SqliteKindyRepository implements KindyRepository {
       }
       for (const operation of data.syncQueue) {
         await db.run(
-          'INSERT INTO sync_operations(id,person_id,kind,state,attempts,last_error,updated_at) VALUES(?,?,?,?,?,?,?)',
+          'INSERT INTO sync_operations(id,person_id,kind,fields_json,state,attempts,last_error,updated_at) VALUES(?,?,?,?,?,?,?,?)',
           [
             operation.id,
             operation.personId,
             operation.kind,
+            operation.fields ? JSON.stringify(operation.fields) : null,
             operation.state,
             operation.attempts,
             operation.lastError ?? null,

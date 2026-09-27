@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Check, Search, UserRoundPlus } from '@lucide/vue'
+import { Check, Search, UserRoundPlus, X } from '@lucide/vue'
 
 import { normalizeText } from '@/domain/duplicates'
 import type { Person } from '@/domain/model'
@@ -23,6 +23,12 @@ const filtered = computed(() => {
     (person) => !normalized || normalizeText(person.displayName).includes(normalized),
   )
 })
+/** Shown above the list, so a selection is visible even when it is far down. */
+const chosen = computed(() =>
+  selected.value
+    .map((id) => props.candidates.find((person) => person.id === id))
+    .filter((person): person is Person => Boolean(person)),
+)
 
 /** Offer a new person when the typed name is not an existing one. */
 const createName = computed(() => {
@@ -49,6 +55,20 @@ function toggle(personId: string): void {
 
 <template>
   <div class="person-picker">
+    <div v-if="chosen.length" class="picked-people">
+      <button
+        v-for="person in chosen"
+        :key="person.id"
+        type="button"
+        class="chip chip--active picked-chip"
+        :aria-label="$t('edit.remove') + ': ' + person.displayName"
+        @click="toggle(person.id)"
+      >
+        <PersonAvatar :name="person.displayName" :photo-ref="person.photoRef" size="tiny" />
+        {{ person.givenName ?? person.displayName }}
+        <X :size="14" />
+      </button>
+    </div>
     <label class="search-field search-field--compact">
       <Search :size="18" aria-hidden="true" />
       <span class="sr-only">{{ $t('connections.searchPerson') }}</span>

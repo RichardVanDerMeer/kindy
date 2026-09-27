@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
-import { ChevronDown, Settings, UserRound } from '@lucide/vue'
+import { ChevronDown, ChevronRight, Settings, UserRound } from '@lucide/vue'
 import { useRouter } from 'vue-router'
 
 import { useKindyStore } from '@/stores/kindy'
@@ -53,31 +53,30 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
       <template v-if="open">
         <button class="menu-scrim" :aria-label="$t('common.close')" @click="open = false" />
         <div class="me-popover card" role="menu">
-          <div class="me-popover__identity">
-            <template v-if="store.selfPerson">
-              <PersonAvatar
-                :name="store.selfPerson.displayName"
-                :photo-ref="store.selfPerson.photoRef"
-                size="small"
-              />
-              <span>
-                <strong>{{ store.selfPerson.displayName }}</strong>
-                <small>{{ $t('me.you') }}</small>
-              </span>
-            </template>
-            <span v-else>
+          <button
+            v-if="store.selfPerson"
+            class="me-popover__identity me-popover__identity--link"
+            role="menuitem"
+            :aria-label="$t('me.myProfile')"
+            @click="go(`/people/${store.selfPerson.id}`)"
+          >
+            <PersonAvatar
+              :name="store.selfPerson.displayName"
+              :photo-ref="store.selfPerson.photoRef"
+              size="small"
+            />
+            <span class="me-popover__name">
+              <strong>{{ store.selfPerson.displayName }}</strong>
+              <small>{{ $t('me.viewProfile') }}</small>
+            </span>
+            <ChevronRight :size="18" aria-hidden="true" />
+          </button>
+          <div v-else class="me-popover__identity">
+            <span>
               <strong>{{ $t('me.notSet') }}</strong>
               <small>{{ $t('me.notSetHint') }}</small>
             </span>
           </div>
-          <button
-            v-if="store.selfPerson"
-            class="me-popover__item"
-            role="menuitem"
-            @click="go(`/people/${store.selfPerson.id}`)"
-          >
-            <UserRound :size="20" /> {{ $t('me.myProfile') }}
-          </button>
           <button class="me-popover__item" role="menuitem" @click="go('/settings')">
             <Settings :size="20" /> {{ $t('me.settings') }}
           </button>

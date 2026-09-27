@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { CalendarClock, CalendarPlus, Unlink } from '@lucide/vue'
+import { CalendarClock, CalendarPlus, Link2, Pencil } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 
 import type { CalendarLink } from '@/domain/model'
+import { useEditorsStore } from '@/stores/editors'
 import { useKindyStore } from '@/stores/kindy'
 
-import AddAgendaItemDialog, { type AgendaDraft } from './AddAgendaItemDialog.vue'
+import type { AgendaDraft } from '@/domain/agendaDraft'
+
+import AddAgendaItemDialog from './AddAgendaItemDialog.vue'
 import CalendarSuggestions from './CalendarSuggestions.vue'
 
 const props = defineProps<{ personId: string }>()
 const store = useKindyStore()
+const editors = useEditorsStore()
 const { t, locale } = useI18n()
 const showPlan = ref(false)
 const planError = ref<string>()
@@ -53,24 +57,28 @@ async function plan(draft: AgendaDraft): Promise<void> {
   <article class="card profile-card appointments-card">
     <div class="card-heading-row card-heading-row--wrap">
       <h2><CalendarClock :size="18" /> {{ $t('calendar.appointments') }}</h2>
-      <button class="section-link" @click="showPlan = true">
+    </div>
+    <div class="appointments-card__actions">
+      <button class="button button--ghost" @click="showPlan = true">
         <CalendarPlus :size="16" /> {{ $t('calendar.plan') }}
+      </button>
+      <button class="button button--ghost" @click="editors.linkAppointment(personId)">
+        <Link2 :size="16" /> {{ $t('editors.linkAction') }}
       </button>
     </div>
     <p v-if="!appointments.length" class="muted">{{ $t('calendar.noAppointments') }}</p>
-    <div v-for="link in appointments" :key="link.id" class="appointment-row">
+    <button
+      v-for="link in appointments"
+      :key="link.id"
+      class="appointment-row appointment-row--button"
+      @click="editors.editAppointment(link.id)"
+    >
       <span class="appointment-row__copy">
         <strong>{{ link.title }}</strong>
         <small>{{ [when(link), link.location].filter(Boolean).join(' · ') }}</small>
       </span>
-      <button
-        class="icon-button"
-        :aria-label="$t('calendar.unlink')"
-        @click="store.unlinkCalendarEvent(link.id)"
-      >
-        <Unlink :size="17" />
-      </button>
-    </div>
+      <Pencil :size="16" aria-hidden="true" />
+    </button>
     <CalendarSuggestions :person-id="personId" />
     <AddAgendaItemDialog
       :open="showPlan"

@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { ChevronDown, ExternalLink, Gift, Plus } from '@lucide/vue'
 
+import { safeWebUrl } from '@/domain/links'
 import type { WishItem } from '@/domain/model'
 import { useKindyStore } from '@/stores/kindy'
 
@@ -65,9 +66,9 @@ async function advance(wish: WishItem): Promise<void> {
         <small v-if="wish.note">{{ wish.note }}</small>
       </button>
       <a
-        v-if="wish.url"
+        v-if="safeWebUrl(wish.url)"
         class="icon-button"
-        :href="wish.url"
+        :href="safeWebUrl(wish.url)"
         target="_blank"
         rel="noopener"
         :aria-label="$t('wishes.openLink')"

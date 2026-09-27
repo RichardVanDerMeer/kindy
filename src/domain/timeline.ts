@@ -2,7 +2,15 @@ import { calendarDay } from './agenda'
 import type { EntityId, Interaction, KindyData, PartialDate } from './model'
 
 export type TimelineKind =
-  'born' | 'married' | 'anniversary' | 'died' | 'memo' | 'interaction' | 'appointment'
+  | 'born'
+  | 'married'
+  | 'anniversary'
+  | 'divorced'
+  | 'custom'
+  | 'died'
+  | 'memo'
+  | 'interaction'
+  | 'appointment'
 
 export interface TimelineEntry {
   id: string
@@ -35,10 +43,17 @@ export function personTimeline(
   }
   for (const event of data.events) {
     if (!event.personIds.includes(personId)) continue
-    if (event.type !== 'wedding-anniversary' && event.type !== 'anniversary') continue
+    const kinds: Partial<Record<typeof event.type, TimelineKind>> = {
+      'wedding-anniversary': 'married',
+      anniversary: 'anniversary',
+      divorce: 'divorced',
+      custom: 'custom',
+    }
+    const kind = kinds[event.type]
+    if (!kind) continue
     entries.push({
       id: event.id,
-      kind: event.type === 'wedding-anniversary' ? 'married' : 'anniversary',
+      kind,
       date: event.date,
       otherPersonIds: event.personIds.filter((id) => id !== personId),
       title: event.title,

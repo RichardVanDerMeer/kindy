@@ -83,6 +83,11 @@ export type SyncField = 'name' | 'phones' | 'emails' | 'birthday' | 'events' | '
 export interface ContactName {
   givenName?: string
   familyName?: string
+  /**
+   * Other parts of the remote name (middle name, prefixes, phonetic names),
+   * passed back unchanged so an update never drops them.
+   */
+  preserved?: Record<string, unknown>
 }
 
 export interface WrittenContactFields {
@@ -103,6 +108,11 @@ export interface SyncOperation {
   id: EntityId
   personId: EntityId
   kind: 'create' | 'update'
+  /**
+   * The fields the user changed. Only these are written, so a change to a
+   * birthday can never overwrite a name or number that changed in Google.
+   */
+  fields?: SyncField[]
   state: 'pending' | 'failed'
   attempts: number
   lastError?: string
@@ -196,7 +206,8 @@ export interface PartialDate {
 
 export interface ImportantEvent {
   id: EntityId
-  type: 'birthday' | 'anniversary' | 'wedding-anniversary' | 'memorial' | 'custom'
+  /** A divorce is a life event only: it is never celebrated in Upcoming. */
+  type: 'birthday' | 'anniversary' | 'wedding-anniversary' | 'divorce' | 'memorial' | 'custom'
   title: string
   date: PartialDate
   personIds: EntityId[]

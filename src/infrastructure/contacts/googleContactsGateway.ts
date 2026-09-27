@@ -48,7 +48,13 @@ export interface GoogleDriveFile {
 interface GoogleWritablePerson {
   resourceName?: string
   etag?: string
-  names?: Array<{ givenName?: string; familyName?: string; metadata?: GoogleFieldMetadata }>
+  names?: Array<
+    Record<string, unknown> & {
+      givenName?: string
+      familyName?: string
+      metadata?: GoogleFieldMetadata
+    }
+  >
   birthdays?: Array<{ date?: ContactDate }>
   events?: Array<{ type?: string; date?: ContactDate }>
   phoneNumbers?: Array<{ value: string; type?: string }>
@@ -71,7 +77,22 @@ function remoteFields(person: GoogleWritablePerson): RemoteContactFields {
     name: (() => {
       const name =
         person.names?.find((candidate) => candidate.metadata?.primary) ?? person.names?.[0]
-      return name ? { givenName: name.givenName, familyName: name.familyName } : undefined
+      if (!name) return undefined
+      // Output-only and derived parts are dropped; everything else is sent back unchanged.
+      const {
+        metadata: _metadata,
+        displayName: _displayName,
+        displayNameLastFirst: _displayNameLastFirst,
+        unstructuredName: _unstructuredName,
+        givenName,
+        familyName,
+        ...preserved
+      } = name as Record<string, unknown>
+      return {
+        givenName: givenName as string | undefined,
+        familyName: familyName as string | undefined,
+        preserved,
+      }
     })(),
     phones: (person.phoneNumbers ?? []).map(({ value, type }) => ({ value, type })),
     emails: (person.emailAddresses ?? []).map(({ value, type }) => ({ value, type })),
@@ -121,8 +142,37 @@ interface GoogleFieldMetadata {
   source?: { id?: string }
 }
 
+const rawPlugin = registerPlugin<GoogleContactsPlugin>('KindyGoogleContacts')
+
+/**
+ * Google access tokens expire after about an hour, and the native side loses
+ * its token when Android restarts the app process. On either, fetch a fresh
+ * token silently (never with a Google screen) and retry the call once.
+ */
+async function withFreshToken<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call()
+  } catch (error) {
+    const code = (error as { code?: string } | null)?.code
+    if (code !== '401' && code !== 'NOT_AUTHORIZED') throw error
+    await rawPlugin.authorize({ interactive: false })
+    return call()
+  }
+}
+
 /** The one native Google plugin: it holds the account token for Contacts and Drive. */
-export const nativeGooglePlugin = registerPlugin<GoogleContactsPlugin>('KindyGoogleContacts')
+export const nativeGooglePlugin: GoogleContactsPlugin = {
+  authorize: (options) => rawPlugin.authorize(options),
+  revoke: () => rawPlugin.revoke(),
+  listConnections: (options) => withFreshToken(() => rawPlugin.listConnections(options)),
+  getContact: (options) => withFreshToken(() => rawPlugin.getContact(options)),
+  updateContact: (options) => withFreshToken(() => rawPlugin.updateContact(options)),
+  createContact: (options) => withFreshToken(() => rawPlugin.createContact(options)),
+  updateContactPhoto: (options) => withFreshToken(() => rawPlugin.updateContactPhoto(options)),
+  findBackup: (options) => withFreshToken(() => rawPlugin.findBackup(options)),
+  uploadBackup: (options) => withFreshToken(() => rawPlugin.uploadBackup(options)),
+  downloadBackup: (options) => withFreshToken(() => rawPlugin.downloadBackup(options)),
+}
 const nativePlugin = nativeGooglePlugin
 
 function fieldId(metadata: GoogleFieldMetadata | undefined, fallback: string): string {
@@ -235,7 +285,9 @@ class NativeGoogleContactsGateway implements ExternalContactsGateway {
 
   async updateContactFields(resourceName: string, etag: string, update: ContactUpdate) {
     const person: GoogleWritablePerson = { etag }
-    if (update.names) person.names = update.names
+    if (update.names) {
+      person.names = update.names.map(({ preserved, ...name }) => ({ ...preserved, ...name }))
+    }
     if (update.phoneNumbers) person.phoneNumbers = update.phoneNumbers
     if (update.emailAddresses) person.emailAddresses = update.emailAddresses
     if (update.birthdays) person.birthdays = update.birthdays.map((date) => ({ date }))
@@ -412,7 +464,9 @@ class PreviewGoogleContactsGateway implements ExternalContactsGateway {
     const store = readPreviewStore()
     const person = store[resourceName] ?? {}
     if ((person.etag ?? 'preview-0') !== etag) throw new Error('The contact changed in Google')
-    if (update.names) person.names = update.names
+    if (update.names) {
+      person.names = update.names.map(({ preserved, ...name }) => ({ ...preserved, ...name }))
+    }
     if (update.phoneNumbers) person.phoneNumbers = update.phoneNumbers
     if (update.emailAddresses) person.emailAddresses = update.emailAddresses
     if (update.birthdays) person.birthdays = update.birthdays.map((date) => ({ date }))
