@@ -121,6 +121,7 @@ export class SqliteKindyRepository implements KindyRepository {
       nickname: optionalString(row.nickname),
       pronouns: optionalString(row.pronouns),
       photoRef: optionalString(row.photo_ref),
+      isSelf: bool(row.is_self) || undefined,
       isFavorite: bool(row.is_favorite),
       isArchived: bool(row.is_archived),
       isDeceased: bool(row.is_deceased),
@@ -187,6 +188,8 @@ export class SqliteKindyRepository implements KindyRepository {
       description: optionalString(row.description),
       colorToken: String(row.color_token) as Circle['colorToken'],
       iconKey: String(row.icon_key),
+      backgroundImageRef: optionalString(row.background_ref),
+      isFavorite: bool(row.is_favorite),
       isArchived: bool(row.is_archived),
     }))
 
@@ -206,6 +209,8 @@ export class SqliteKindyRepository implements KindyRepository {
       customLabel: optionalString(row.custom_label),
       fromPersonLabel: optionalString(row.from_person_label),
       toPersonLabel: optionalString(row.to_person_label),
+      fromPersonRole: optionalString(row.from_person_role) as Relationship['fromPersonRole'],
+      toPersonRole: optionalString(row.to_person_role) as Relationship['toPersonRole'],
       startedOn: optionalString(row.started_on),
       endedOn: optionalString(row.ended_on),
       note: optionalString(row.note),
@@ -330,13 +335,15 @@ export class SqliteKindyRepository implements KindyRepository {
       }
       for (const circle of data.circles) {
         await db.run(
-          'INSERT INTO circles(id,name,description,color_token,icon_key,is_archived) VALUES(?,?,?,?,?,?)',
+          'INSERT INTO circles(id,name,description,color_token,icon_key,background_ref,is_favorite,is_archived) VALUES(?,?,?,?,?,?,?,?)',
           [
             circle.id,
             circle.name,
             circle.description ?? null,
             circle.colorToken,
             circle.iconKey,
+            circle.backgroundImageRef ?? null,
+            Number(circle.isFavorite),
             Number(circle.isArchived),
           ],
           false,
@@ -357,7 +364,7 @@ export class SqliteKindyRepository implements KindyRepository {
       }
       for (const relationship of data.relationships) {
         await db.run(
-          'INSERT INTO relationships(id,from_person_id,to_person_id,type,custom_label,from_person_label,to_person_label,started_on,ended_on,note) VALUES(?,?,?,?,?,?,?,?,?,?)',
+          'INSERT INTO relationships(id,from_person_id,to_person_id,type,custom_label,from_person_label,to_person_label,from_person_role,to_person_role,started_on,ended_on,note) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
           [
             relationship.id,
             relationship.fromPersonId,
@@ -366,6 +373,8 @@ export class SqliteKindyRepository implements KindyRepository {
             relationship.customLabel ?? null,
             relationship.fromPersonLabel ?? null,
             relationship.toPersonLabel ?? null,
+            relationship.fromPersonRole ?? null,
+            relationship.toPersonRole ?? null,
             relationship.startedOn ?? null,
             relationship.endedOn ?? null,
             relationship.note ?? null,
@@ -593,9 +602,9 @@ export class SqliteKindyRepository implements KindyRepository {
   private async writePerson(person: Person): Promise<void> {
     const db = this.requireDatabase()
     await db.run(
-      `INSERT INTO people(id,display_name,given_name,middle_name,family_name,nickname,pronouns,photo_ref,is_favorite,is_archived,is_deceased,birth_year,birth_month,birth_day,death_year,death_month,death_day,memorial_note,how_we_met,created_at,updated_at,deleted_at)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-       ON CONFLICT(id) DO UPDATE SET display_name=excluded.display_name,given_name=excluded.given_name,middle_name=excluded.middle_name,family_name=excluded.family_name,nickname=excluded.nickname,pronouns=excluded.pronouns,photo_ref=excluded.photo_ref,is_favorite=excluded.is_favorite,is_archived=excluded.is_archived,is_deceased=excluded.is_deceased,birth_year=excluded.birth_year,birth_month=excluded.birth_month,birth_day=excluded.birth_day,death_year=excluded.death_year,death_month=excluded.death_month,death_day=excluded.death_day,memorial_note=excluded.memorial_note,how_we_met=excluded.how_we_met,updated_at=excluded.updated_at,deleted_at=excluded.deleted_at`,
+      `INSERT INTO people(id,display_name,given_name,middle_name,family_name,nickname,pronouns,photo_ref,is_self,is_favorite,is_archived,is_deceased,birth_year,birth_month,birth_day,death_year,death_month,death_day,memorial_note,how_we_met,created_at,updated_at,deleted_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET display_name=excluded.display_name,given_name=excluded.given_name,middle_name=excluded.middle_name,family_name=excluded.family_name,nickname=excluded.nickname,pronouns=excluded.pronouns,photo_ref=excluded.photo_ref,is_self=excluded.is_self,is_favorite=excluded.is_favorite,is_archived=excluded.is_archived,is_deceased=excluded.is_deceased,birth_year=excluded.birth_year,birth_month=excluded.birth_month,birth_day=excluded.birth_day,death_year=excluded.death_year,death_month=excluded.death_month,death_day=excluded.death_day,memorial_note=excluded.memorial_note,how_we_met=excluded.how_we_met,updated_at=excluded.updated_at,deleted_at=excluded.deleted_at`,
       [
         person.id,
         person.displayName,
@@ -605,6 +614,7 @@ export class SqliteKindyRepository implements KindyRepository {
         person.nickname ?? null,
         person.pronouns ?? null,
         person.photoRef ?? null,
+        Number(person.isSelf ?? false),
         Number(person.isFavorite),
         Number(person.isArchived),
         Number(person.isDeceased),

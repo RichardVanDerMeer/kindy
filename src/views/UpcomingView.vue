@@ -1,48 +1,101 @@
 <script setup lang="ts">
-import { Bell, CalendarHeart } from '@lucide/vue'
+import { computed, ref } from 'vue'
+import { ChevronDown, ChevronUp } from '@lucide/vue'
+import { useI18n } from 'vue-i18n'
 
-import PersonAvatar from '@/components/PersonAvatar.vue'
+import AgendaCard from '@/components/AgendaCard.vue'
 import ViewHeader from '@/components/ViewHeader.vue'
+import { agendaFilterFor, agendaFilters, type AgendaFilter, type AgendaItem } from '@/domain/agenda'
 import { useKindyStore } from '@/stores/kindy'
 
 const store = useKindyStore()
+const { t, locale } = useI18n()
 
-function peopleFor(ids: string[]) {
-  return store.people.filter((person) => ids.includes(person.id))
+const active = ref<Set<AgendaFilter>>(new Set(agendaFilters))
+const showEarlier = ref(false)
+
+function toggle(filter: AgendaFilter): void {
+  const next = new Set(active.value)
+  if (next.has(filter)) next.delete(filter)
+  else next.add(filter)
+  active.value = next
 }
+
+const visible = computed(() =>
+  store.agenda.filter((item) => active.value.has(agendaFilterFor(item.kind))),
+)
+const earlier = computed(() => visible.value.filter((item) => item.daysFromToday < 0))
+
+/** Groups: today, the rest of this week, then one group per month. */
+const groups = computed(() => {
+  const result: Array<{ key: string; label: string; items: AgendaItem[] }> = []
+  function push(key: string, label: string, item: AgendaItem): void {
+    const last = result.at(-1)
+    if (last?.key === key) last.items.push(item)
+    else result.push({ key, label, items: [item] })
+  }
+  for (const item of visible.value) {
+    if (item.daysFromToday < 0) continue
+    if (item.daysFromToday === 0) push('today', t('upcoming.today'), item)
+    else if (item.daysFromToday <= 7) push('week', t('upcoming.thisWeek'), item)
+    else {
+      const date = new Date(`${item.date}T12:00:00`)
+      const label = new Intl.DateTimeFormat(locale.value, {
+        month: 'long',
+        year: 'numeric',
+      }).format(date)
+      push(item.date.slice(0, 7), label, item)
+    }
+  }
+  return result
+})
 </script>
 
 <template>
-  <section class="view">
+  <section class="view upcoming-view">
     <ViewHeader />
     <h1>{{ $t('upcoming.title') }}</h1>
-    <div v-if="store.upcoming.length" class="timeline-list">
-      <article v-for="item in store.upcoming" :key="item.id" class="card upcoming-card">
-        <div class="upcoming-date">
-          <strong>{{
-            new Intl.DateTimeFormat(undefined, { day: 'numeric' }).format(item.dueAt)
-          }}</strong>
-          <span>{{
-            new Intl.DateTimeFormat(undefined, { month: 'short' }).format(item.dueAt)
-          }}</span>
-        </div>
-        <div class="avatar-stack" v-if="item.personIds.length">
-          <PersonAvatar
-            v-for="(person, index) in peopleFor(item.personIds)"
-            :key="person.id"
-            :name="person.displayName"
-            size="small"
-            :tone="index"
-          />
-        </div>
-        <component :is="item.kind === 'event' ? CalendarHeart : Bell" v-else :size="26" />
-        <div class="upcoming-card__copy">
-          <strong>{{ item.title }}</strong>
-          <span>{{ $t(`upcoming.${item.subtitle}`, item.subtitle) }}</span>
-        </div>
-      </article>
+
+    <div class="filter-row" role="group" :aria-label="$t('upcoming.title')">
+      <button
+        v-for="filter in agendaFilters"
+        :key="filter"
+        class="chip chip--toggle"
+        :class="{ 'chip--active': active.has(filter) }"
+        :aria-pressed="active.has(filter)"
+        @click="toggle(filter)"
+      >
+        {{ $t(`upcoming.filters.${filter}`) }}
+      </button>
     </div>
-    <div v-else class="empty-state card">
+
+    <button
+      v-if="earlier.length"
+      class="earlier-toggle"
+      :aria-expanded="showEarlier"
+      @click="showEarlier = !showEarlier"
+    >
+      <component :is="showEarlier ? ChevronUp : ChevronDown" :size="16" />
+      {{ showEarlier ? $t('upcoming.hideEarlier') : $t('upcoming.earlierThisWeek') }}
+      <span class="earlier-toggle__count">{{ earlier.length }}</span>
+    </button>
+    <section v-if="showEarlier && earlier.length" class="agenda-group agenda-group--earlier">
+      <h2 class="section-title">{{ $t('upcoming.earlierThisWeek') }}</h2>
+      <div class="timeline-list">
+        <AgendaCard v-for="item in earlier" :key="item.id" :item="item" />
+      </div>
+    </section>
+
+    <section v-for="group in groups" :key="group.key" class="agenda-group">
+      <h2 class="section-title" :class="{ 'section-title--today': group.key === 'today' }">
+        {{ group.label }}
+      </h2>
+      <div class="timeline-list">
+        <AgendaCard v-for="item in group.items" :key="item.id" :item="item" />
+      </div>
+    </section>
+
+    <div v-if="!groups.length" class="empty-state card">
       <h2>{{ $t('upcoming.empty') }}</h2>
     </div>
   </section>

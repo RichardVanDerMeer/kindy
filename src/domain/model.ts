@@ -31,6 +31,8 @@ export interface Person {
   nickname?: string
   pronouns?: string
   photoRef?: string
+  /** Marks the person who uses Kindy ("Mij"). At most one person carries this flag. */
+  isSelf?: boolean
   isFavorite: boolean
   isArchived: boolean
   isDeceased: boolean
@@ -60,10 +62,14 @@ export interface Circle {
   id: EntityId
   name: string
   description?: string
-  colorToken: 'family' | 'team' | 'work' | 'primary' | 'neutral'
+  colorToken: CircleColor
   iconKey: string
+  backgroundImageRef?: string
+  isFavorite: boolean
   isArchived: boolean
 }
+
+export type CircleColor = 'family' | 'team' | 'work' | 'primary' | 'note' | 'neutral'
 
 export interface CircleMembership {
   circleId: EntityId
@@ -84,14 +90,38 @@ export type RelationshipType =
   | 'introduced'
   | 'custom'
 
+/** A specific family or friendship role, used for labels and the family tree. */
+export type RelationshipRole =
+  | 'father'
+  | 'mother'
+  | 'parent'
+  | 'son'
+  | 'daughter'
+  | 'child'
+  | 'husband'
+  | 'wife'
+  | 'spouse'
+  | 'partner'
+  | 'brother'
+  | 'sister'
+  | 'sibling'
+  | 'best-friend'
+  | 'friend'
+
 export interface Relationship {
   id: EntityId
   fromPersonId: EntityId
   toPersonId: EntityId
   type: RelationshipType
   customLabel?: string
+  /** Free label shown on the from-person's profile, describing the to-person. */
   fromPersonLabel?: string
+  /** Free label shown on the to-person's profile, describing the from-person. */
   toPersonLabel?: string
+  /** Role shown on the from-person's profile, describing the to-person. */
+  fromPersonRole?: RelationshipRole
+  /** Role shown on the to-person's profile, describing the from-person. */
+  toPersonRole?: RelationshipRole
   startedOn?: string
   endedOn?: string
   note?: string

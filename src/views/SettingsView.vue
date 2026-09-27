@@ -1,13 +1,27 @@
 <script setup lang="ts">
-import { ArrowLeft, ContactRound, LockKeyhole, ShieldCheck } from '@lucide/vue'
+import {
+  Apple,
+  ArrowLeft,
+  ContactRound,
+  FileSpreadsheet,
+  Languages,
+  LockKeyhole,
+  RotateCcw,
+  ShieldCheck,
+} from '@lucide/vue'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { supportedLocales, useLocaleSetting } from '@/composables/useLocaleSetting'
+import { useKindyStore } from '@/stores/kindy'
 import { useSecurityStore } from '@/stores/security'
 
 const router = useRouter()
 const security = useSecurityStore()
+const store = useKindyStore()
+const { locale, setLocale } = useLocaleSetting()
 const savingLock = ref(false)
+const isDev = import.meta.env.DEV
 
 async function toggleLock(): Promise<void> {
   savingLock.value = true
@@ -29,6 +43,28 @@ async function toggleLock(): Promise<void> {
       <span class="toolbar-spacer" />
     </header>
 
+    <h2 class="section-title">{{ $t('settings.general') }}</h2>
+    <article class="card settings-card">
+      <div class="settings-card__icon"><Languages :size="24" /></div>
+      <div class="settings-card__copy">
+        <h2>{{ $t('settings.language') }}</h2>
+        <p>{{ $t('settings.languageHint') }}</p>
+      </div>
+      <div class="segmented" role="radiogroup" :aria-label="$t('settings.language')">
+        <button
+          v-for="option in supportedLocales"
+          :key="option.code"
+          role="radio"
+          :aria-checked="locale === option.code"
+          :class="{ active: locale === option.code }"
+          @click="setLocale(option.code)"
+        >
+          {{ option.label }}
+        </button>
+      </div>
+    </article>
+
+    <h2 class="section-title">{{ $t('settings.security') }}</h2>
     <article class="card settings-card">
       <div class="settings-card__icon"><LockKeyhole :size="24" /></div>
       <div class="settings-card__copy">
@@ -51,6 +87,7 @@ async function toggleLock(): Promise<void> {
       </div>
     </article>
 
+    <h2 class="section-title">{{ $t('settings.sources') }}</h2>
     <article class="card settings-card settings-card--google">
       <div class="settings-card__icon settings-card__icon--google"><ContactRound :size="24" /></div>
       <div class="settings-card__copy">
@@ -67,10 +104,46 @@ async function toggleLock(): Promise<void> {
       </ul>
       <button
         class="button button--ghost settings-wide-button"
-        @click="router.push('/?import=google')"
+        @click="router.push({ path: '/people', query: { import: 'google' } })"
       >
         {{ $t('settings.connectGoogle') }}
       </button>
     </article>
+
+    <article class="card settings-card settings-card--soon">
+      <div class="settings-card__icon"><Apple :size="24" /></div>
+      <div class="settings-card__copy">
+        <div class="settings-title-row">
+          <h2>{{ $t('settings.appleContacts') }}</h2>
+          <span class="status-pill status-pill--muted">{{ $t('settings.comingSoon') }}</span>
+        </div>
+        <p>{{ $t('settings.appleContactsHint') }}</p>
+      </div>
+    </article>
+
+    <article class="card settings-card settings-card--soon">
+      <div class="settings-card__icon"><FileSpreadsheet :size="24" /></div>
+      <div class="settings-card__copy">
+        <div class="settings-title-row">
+          <h2>{{ $t('settings.fileImport') }}</h2>
+          <span class="status-pill status-pill--muted">{{ $t('settings.comingSoon') }}</span>
+        </div>
+        <p>{{ $t('settings.fileImportHint') }}</p>
+      </div>
+    </article>
+
+    <template v-if="isDev">
+      <h2 class="section-title">{{ $t('settings.developer') }}</h2>
+      <article class="card settings-card">
+        <div class="settings-card__icon"><RotateCcw :size="24" /></div>
+        <div class="settings-card__copy">
+          <h2>{{ $t('settings.resetDemo') }}</h2>
+          <p>{{ $t('settings.resetDemoHint') }}</p>
+        </div>
+        <button class="button button--ghost settings-wide-button" @click="store.resetDemoData">
+          {{ $t('settings.resetDemo') }}
+        </button>
+      </article>
+    </template>
   </section>
 </template>

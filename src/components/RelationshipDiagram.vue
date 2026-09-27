@@ -29,13 +29,18 @@ const partners = computed(() =>
 const children = computed(() =>
   props.relationships.filter((relationship) => relationship.displayType === 'parent-of'),
 )
+const siblings = computed(() =>
+  props.relationships.filter((relationship) => relationship.displayType === 'sibling-of'),
+)
 const friends = computed(() =>
   props.relationships.filter((relationship) => relationship.displayType === 'friend-of'),
 )
 const otherConnections = computed(() =>
   props.relationships.filter(
     (relationship) =>
-      !['child-of', 'partner-of', 'parent-of', 'friend-of'].includes(relationship.displayType),
+      !['child-of', 'partner-of', 'parent-of', 'sibling-of', 'friend-of'].includes(
+        relationship.displayType,
+      ),
   ),
 )
 
@@ -46,7 +51,10 @@ function select(person?: Person): void {
 
 <template>
   <div class="connections-layout">
-    <article v-if="parents.length || partners.length || children.length" class="card family-map">
+    <article
+      v-if="parents.length || partners.length || children.length || siblings.length"
+      class="card family-map"
+    >
       <header class="connection-section-heading">
         <span class="section-icon section-icon--family"><UsersRound :size="20" /></span>
         <span>
@@ -59,7 +67,7 @@ function select(person?: Person): void {
         <span class="generation-label">{{ $t('connections.parents') }}</span>
         <div class="family-people family-people--paired">
           <button
-            v-for="(relationship, index) in parents"
+            v-for="relationship in parents"
             :key="relationship.id"
             class="connection-person"
             @click="select(relationship.person)"
@@ -67,8 +75,8 @@ function select(person?: Person): void {
             <PersonAvatar
               v-if="relationship.person"
               :name="relationship.person.displayName"
+              :photo-ref="relationship.person.photoRef"
               size="medium"
-              :tone="index + 2"
               :deceased="relationship.person.isDeceased"
             />
             <strong>{{ relationship.person?.displayName }}</strong>
@@ -94,7 +102,7 @@ function select(person?: Person): void {
             <small>{{ $t('connections.you') }}</small>
           </div>
 
-          <template v-for="(relationship, index) in partners" :key="relationship.id">
+          <template v-for="relationship in partners" :key="relationship.id">
             <div class="couple-link" aria-hidden="true">
               <Heart :size="17" fill="currentColor" />
             </div>
@@ -102,8 +110,8 @@ function select(person?: Person): void {
               <PersonAvatar
                 v-if="relationship.person"
                 :name="relationship.person.displayName"
+                :photo-ref="relationship.person.photoRef"
                 size="medium"
-                :tone="index + 1"
                 :deceased="relationship.person.isDeceased"
               />
               <strong>{{ relationship.person?.displayName }}</strong>
@@ -123,7 +131,7 @@ function select(person?: Person): void {
         <span class="generation-label">{{ $t('connections.children') }}</span>
         <div class="family-people family-people--children">
           <button
-            v-for="(relationship, index) in children"
+            v-for="relationship in children"
             :key="relationship.id"
             class="connection-person"
             @click="select(relationship.person)"
@@ -131,12 +139,34 @@ function select(person?: Person): void {
             <PersonAvatar
               v-if="relationship.person"
               :name="relationship.person.displayName"
+              :photo-ref="relationship.person.photoRef"
               size="medium"
-              :tone="index + 1"
               :deceased="relationship.person.isDeceased"
             />
             <strong>{{ relationship.person?.displayName }}</strong>
             <small>{{ relationship.displayLabel || $t('connections.child') }}</small>
+          </button>
+        </div>
+      </div>
+
+      <div v-if="siblings.length" class="family-generation family-generation--siblings">
+        <span class="generation-label">{{ $t('connections.siblings') }}</span>
+        <div class="family-people family-people--children">
+          <button
+            v-for="relationship in siblings"
+            :key="relationship.id"
+            class="connection-person"
+            @click="select(relationship.person)"
+          >
+            <PersonAvatar
+              v-if="relationship.person"
+              :name="relationship.person.displayName"
+              :photo-ref="relationship.person.photoRef"
+              size="medium"
+              :deceased="relationship.person.isDeceased"
+            />
+            <strong>{{ relationship.person?.displayName }}</strong>
+            <small>{{ relationship.displayLabel || $t('roles.sibling') }}</small>
           </button>
         </div>
       </div>
@@ -152,7 +182,7 @@ function select(person?: Person): void {
       </header>
 
       <button
-        v-for="(relationship, index) in friends"
+        v-for="relationship in friends"
         :key="relationship.id"
         class="friend-connection"
         @click="select(relationship.person)"
@@ -160,8 +190,8 @@ function select(person?: Person): void {
         <PersonAvatar
           v-if="relationship.person"
           :name="relationship.person.displayName"
+          :photo-ref="relationship.person.photoRef"
           size="medium"
-          :tone="index + 3"
           :deceased="relationship.person.isDeceased"
         />
         <span class="friend-connection__copy">
@@ -187,6 +217,7 @@ function select(person?: Person): void {
         <PersonAvatar
           v-if="relationship.person"
           :name="relationship.person.displayName"
+          :photo-ref="relationship.person.photoRef"
           size="small"
           :deceased="relationship.person.isDeceased"
         />

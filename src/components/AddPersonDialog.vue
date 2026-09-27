@@ -5,27 +5,27 @@ const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{
   close: []
   google: []
-  save: [input: { displayName: string; howWeMet?: string }]
+  save: [input: { givenName: string; familyName?: string }]
 }>()
 
-const displayName = ref('')
-const howWeMet = ref('')
+const givenName = ref('')
+const familyName = ref('')
 const nameInput = ref<HTMLInputElement>()
 
 watch(
   () => props.open,
   async (isOpen) => {
     if (!isOpen) return
-    displayName.value = ''
-    howWeMet.value = ''
+    givenName.value = ''
+    familyName.value = ''
     await nextTick()
     nameInput.value?.focus()
   },
 )
 
 function submit(): void {
-  if (!displayName.value.trim()) return
-  emit('save', { displayName: displayName.value, howWeMet: howWeMet.value })
+  if (!givenName.value.trim()) return
+  emit('save', { givenName: givenName.value, familyName: familyName.value })
 }
 </script>
 
@@ -45,19 +45,21 @@ function submit(): void {
         <div class="dialog-divider">
           <span>{{ $t('google.orManual') }}</span>
         </div>
-        <label class="field">
-          <span>{{ $t('people.name') }}</span>
-          <input ref="nameInput" v-model="displayName" required autocomplete="name" />
-        </label>
-        <label class="field">
-          <span>{{ $t('people.howWeMet') }}</span>
-          <input v-model="howWeMet" />
-        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>{{ $t('people.givenName') }}</span>
+            <input ref="nameInput" v-model="givenName" required autocomplete="given-name" />
+          </label>
+          <label class="field">
+            <span>{{ $t('people.familyName') }}</span>
+            <input v-model="familyName" autocomplete="family-name" />
+          </label>
+        </div>
         <div class="dialog__actions">
           <button type="button" class="button button--ghost" @click="$emit('close')">
             {{ $t('people.cancel') }}
           </button>
-          <button type="submit" class="button button--primary" :disabled="!displayName.trim()">
+          <button type="submit" class="button button--primary" :disabled="!givenName.trim()">
             {{ $t('people.save') }}
           </button>
         </div>

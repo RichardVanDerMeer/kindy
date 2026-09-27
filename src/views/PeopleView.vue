@@ -2,8 +2,7 @@
 import { computed, ref } from 'vue'
 import { ChevronRight, Plus, Search, Star } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import AddPersonDialog from '@/components/AddPersonDialog.vue'
 import GoogleContactsDialog from '@/components/GoogleContactsDialog.vue'
@@ -20,7 +19,13 @@ const router = useRouter()
 const route = useRoute()
 const { locale, t } = useI18n()
 const query = ref('')
-const filter = ref<'all' | 'favorites' | string>('all')
+const filter = ref<'all' | 'favorites' | string>(
+  typeof route.query.circle === 'string'
+    ? route.query.circle
+    : route.query.filter === 'favorites'
+      ? 'favorites'
+      : 'all',
+)
 const showAddPerson = ref(false)
 const showGoogleContacts = ref(route.query.import === 'google')
 
@@ -35,24 +40,13 @@ const filteredPeople = computed(() => {
         (membership) => membership.circleId === filter.value && membership.personId === person.id,
       )
     const searchable = normalizeText(
-      [
-        person.displayName,
-        person.nickname,
-        person.howWeMet,
-        ...person.details.map((item) => item.value),
-      ]
+      [person.displayName, person.nickname, ...person.details.map((item) => item.value)]
         .filter(Boolean)
         .join(' '),
     )
     return matchesFilter && (!normalizedQuery || searchable.includes(normalizedQuery))
   })
 })
-
-function circleCount(circleId: string): number {
-  return (store.data?.memberships ?? []).filter(
-    (membership) => membership.circleId === circleId && !membership.endedOn,
-  ).length
-}
 
 function personSubtitle(person: Person): string {
   if (person.isDeceased) {
@@ -66,7 +60,7 @@ function personSubtitle(person: Person): string {
     .join(' · ')
 }
 
-async function addPerson(input: { displayName: string; howWeMet?: string }): Promise<void> {
+async function addPerson(input: { givenName: string; familyName?: string }): Promise<void> {
   const person = await store.addPerson(input)
   showAddPerson.value = false
   await router.push({ name: 'person', params: { id: person.id } })
@@ -83,7 +77,7 @@ async function importGoogleContacts(
 ): Promise<void> {
   await store.importExternalContacts(connection, contacts)
   showGoogleContacts.value = false
-  await router.replace({ name: 'people' })
+  await router.replace({ name: 'people', query: {} })
 }
 </script>
 
@@ -120,25 +114,9 @@ async function importGoogleContacts(
       </button>
     </div>
 
-    <div v-if="store.circles.length" class="circle-summary" aria-label="Circle summary">
-      <button
-        v-for="circle in store.circles.slice(0, 3)"
-        :key="circle.id"
-        class="circle-tile"
-        :class="`surface--${circle.colorToken}`"
-        @click="filter = circle.id"
-      >
-        <span class="circle-tile__icon" aria-hidden="true">{{
-          circle.iconKey === 'home' ? '⌂' : '○'
-        }}</span>
-        <strong>{{ circle.name }}</strong>
-        <span>{{ circleCount(circle.id) }}</span>
-      </button>
-    </div>
-
     <div v-if="filteredPeople.length" class="person-list">
       <article
-        v-for="(person, index) in filteredPeople"
+        v-for="person in filteredPeople"
         :key="person.id"
         class="person-row"
         :class="{ 'person-row--deceased': person.isDeceased }"
@@ -147,12 +125,11 @@ async function importGoogleContacts(
           <PersonAvatar
             :name="person.displayName"
             :photo-ref="person.photoRef"
-            :tone="index"
             :deceased="person.isDeceased"
           />
           <span class="person-row__copy">
             <strong>{{ person.displayName }}</strong>
-            <span>{{ personSubtitle(person) || person.howWeMet || $t('brand.descriptor') }}</span>
+            <span>{{ person.isSelf ? $t('me.you') : personSubtitle(person) }}</span>
           </span>
         </button>
         <button

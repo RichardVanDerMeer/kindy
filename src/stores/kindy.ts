@@ -1,7 +1,9 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import type { KindyData, Person, UpcomingItem } from '@/domain/model'
+import { buildAgenda, calendarDay } from '@/domain/agenda'
+import { createConnection } from '@/domain/connections'
+import type { Circle, KindyData, Person, RelationshipRole } from '@/domain/model'
 import type { ExternalContactsConnection, ExternalContactSnapshot } from '@/domain/ports'
 import { getKindyRepository } from '@/infrastructure/repositories/repository'
 
@@ -12,7 +14,7 @@ export const useKindyStore = defineStore('kindy', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const data = ref<KindyData | null>(null)
-  const upcoming = ref<UpcomingItem[]>([])
+  const today = ref(calendarDay(new Date()))
 
   const people = computed(() =>
     (data.value?.people ?? [])
@@ -20,6 +22,17 @@ export const useKindyStore = defineStore('kindy', () => {
       .sort((left, right) => left.displayName.localeCompare(right.displayName)),
   )
   const circles = computed(() => (data.value?.circles ?? []).filter((circle) => !circle.isArchived))
+  const selfPerson = computed(() =>
+    (data.value?.people ?? []).find((person) => person.isSelf && !person.deletedAt),
+  )
+  const favoritePeople = computed(() =>
+    people.value.filter((person) => person.isFavorite && !person.isSelf),
+  )
+  const favoriteCircles = computed(() => circles.value.filter((circle) => circle.isFavorite))
+  /** Everything from a week ago until a year ahead; views narrow it further. */
+  const agenda = computed(() =>
+    data.value ? buildAgenda(data.value, today.value, { daysBack: 7, daysAhead: 365 }) : [],
+  )
 
   async function initialize(): Promise<void> {
     if (initialized.value || loading.value) return
@@ -38,12 +51,23 @@ export const useKindyStore = defineStore('kindy', () => {
 
   async function refresh(): Promise<void> {
     data.value = await repository.getData()
-    upcoming.value = await repository.listUpcoming(Date.now(), 20)
+    today.value = calendarDay(new Date())
+  }
+
+  /**
+   * Applies a change to a plain snapshot and stores it. This rewrites the full
+   * dataset, which is fine for the current demo phase; targeted repository
+   * writes should replace it before larger datasets.
+   */
+  async function mutate(change: (draft: KindyData) => void): Promise<void> {
+    const next = await repository.getData()
+    change(next)
+    await repository.replaceData(next)
+    await refresh()
   }
 
   async function lock(): Promise<void> {
     data.value = null
-    upcoming.value = []
     initialized.value = false
     await repository.close()
   }
@@ -53,12 +77,15 @@ export const useKindyStore = defineStore('kindy', () => {
     await refresh()
   }
 
-  async function addPerson(input: { displayName: string; howWeMet?: string }): Promise<Person> {
+  async function addPerson(input: { givenName: string; familyName?: string }): Promise<Person> {
     const now = Date.now()
+    const givenName = input.givenName.trim()
+    const familyName = input.familyName?.trim() || undefined
     const person: Person = {
       id: crypto.randomUUID(),
-      displayName: input.displayName.trim(),
-      howWeMet: input.howWeMet?.trim() || undefined,
+      displayName: [givenName, familyName].filter(Boolean).join(' '),
+      givenName,
+      familyName,
       isFavorite: false,
       isArchived: false,
       isDeceased: false,
@@ -145,6 +172,74 @@ export const useKindyStore = defineStore('kindy', () => {
     return { imported, skipped }
   }
 
+  async function setSelf(personId: string): Promise<void> {
+    await mutate((draft) => {
+      for (const person of draft.people) person.isSelf = person.id === personId || undefined
+    })
+  }
+
+  async function toggleCircleFavorite(circleId: string): Promise<void> {
+    await mutate((draft) => {
+      const circle = draft.circles.find((candidate) => candidate.id === circleId)
+      if (circle) circle.isFavorite = !circle.isFavorite
+    })
+  }
+
+  async function saveCircle(circle: Circle): Promise<void> {
+    await mutate((draft) => {
+      const index = draft.circles.findIndex((candidate) => candidate.id === circle.id)
+      if (index === -1) draft.circles.push({ ...circle })
+      else draft.circles[index] = { ...circle }
+    })
+  }
+
+  async function setPersonCircles(personId: string, circleIds: string[]): Promise<void> {
+    await mutate((draft) => {
+      draft.memberships = draft.memberships.filter(
+        (membership) =>
+          membership.personId !== personId ||
+          membership.endedOn ||
+          circleIds.includes(membership.circleId),
+      )
+      for (const circleId of circleIds) {
+        const exists = draft.memberships.some(
+          (membership) =>
+            membership.personId === personId &&
+            membership.circleId === circleId &&
+            !membership.endedOn,
+        )
+        if (!exists) draft.memberships.push({ circleId, personId })
+      }
+    })
+  }
+
+  async function addConnection(
+    subjectId: string,
+    otherId: string,
+    role: RelationshipRole,
+  ): Promise<void> {
+    await mutate((draft) => {
+      draft.relationships.push(
+        createConnection(crypto.randomUUID(), subjectId, otherId, role, draft.relationships),
+      )
+    })
+  }
+
+  async function removeConnection(relationshipId: string): Promise<void> {
+    await mutate((draft) => {
+      draft.relationships = draft.relationships.filter(
+        (relationship) => relationship.id !== relationshipId,
+      )
+    })
+  }
+
+  async function resetDemoData(): Promise<void> {
+    if (!import.meta.env.DEV) return
+    const { demoData } = await import('@/fixtures/demo')
+    await repository.replaceData(structuredClone(demoData))
+    await refresh()
+  }
+
   async function search(query: string): Promise<Person[]> {
     return repository.search(query)
   }
@@ -158,6 +253,19 @@ export const useKindyStore = defineStore('kindy', () => {
       }))
   }
 
+  function circleMembers(circleId: string): Person[] {
+    const ids = new Set(
+      (data.value?.memberships ?? [])
+        .filter((membership) => membership.circleId === circleId && !membership.endedOn)
+        .map((membership) => membership.personId),
+    )
+    return people.value.filter((person) => ids.has(person.id))
+  }
+
+  function personById(personId: string): Person | undefined {
+    return data.value?.people.find((person) => person.id === personId)
+  }
+
   return {
     initialized,
     loading,
@@ -165,15 +273,27 @@ export const useKindyStore = defineStore('kindy', () => {
     data,
     people,
     circles,
-    upcoming,
+    selfPerson,
+    favoritePeople,
+    favoriteCircles,
+    agenda,
     initialize,
     refresh,
     lock,
     savePerson,
     addPerson,
     toggleFavorite,
+    toggleCircleFavorite,
+    setSelf,
+    saveCircle,
+    setPersonCircles,
+    addConnection,
+    removeConnection,
+    resetDemoData,
     importExternalContacts,
     search,
     circleMemberships,
+    circleMembers,
+    personById,
   }
 })

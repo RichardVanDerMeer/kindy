@@ -125,13 +125,13 @@ function submit(): void {
           </label>
           <div class="contact-picker-list">
             <button
-              v-for="(contact, index) in filteredContacts"
+              v-for="contact in filteredContacts"
               :key="contact.resourceName"
               class="contact-picker-row"
               :class="{ 'contact-picker-row--selected': selected.has(contact.resourceName) }"
               @click="toggle(contact.resourceName)"
             >
-              <PersonAvatar :name="contact.displayName" size="small" :tone="index" />
+              <PersonAvatar :name="contact.displayName" size="small" />
               <span>
                 <strong>{{ contact.displayName }}</strong>
                 <small>{{ contact.contactPoints[0]?.value || $t('google.noDetails') }}</small>
