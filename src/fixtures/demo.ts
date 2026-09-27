@@ -68,8 +68,9 @@ function wish(
   return { id, personId, title, status, note, createdAt: now - DAY, updatedAt: now - DAY }
 }
 
+/** Bundled with the demo data only, so production builds carry no demo pictures. */
 function avatar(name: string): string {
-  return `${import.meta.env.BASE_URL}demo-avatars/${name}.svg`
+  return new URL(`./avatars/${name}.svg`, import.meta.url).href
 }
 
 function connection(

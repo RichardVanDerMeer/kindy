@@ -9,7 +9,6 @@ import {
   type UpcomingItem,
 } from '@/domain/model'
 import type { KindyRepository } from '@/domain/ports'
-import { demoData } from '@/fixtures/demo'
 
 const STORAGE_KEY = 'kindy.local-data.v3'
 const SCHEMA_VERSION = KINDY_SCHEMA_VERSION
@@ -37,6 +36,15 @@ function clone<T>(value: T): T {
   return structuredClone(value)
 }
 
+/**
+ * Demo data exists for development only. It is loaded on demand inside
+ * `import.meta.env.DEV` checks, so production builds leave it out entirely.
+ */
+async function loadDemoData(): Promise<KindyData> {
+  const { demoData } = await import('@/fixtures/demo')
+  return clone(demoData)
+}
+
 export class BrowserKindyRepository implements KindyRepository {
   private data: KindyData = emptyData()
 
@@ -47,7 +55,7 @@ export class BrowserKindyRepository implements KindyRepository {
       this.data.externalIdentities ??= []
       if (import.meta.env.DEV && this.data.schemaVersion < SCHEMA_VERSION) {
         // Preview data is synthetic: reseed it rather than migrating old demo shapes.
-        this.data = clone(demoData)
+        this.data = await loadDemoData()
       } else if (this.data.schemaVersion < SCHEMA_VERSION) {
         for (const circle of this.data.circles) circle.isFavorite ??= false
         this.data.syncQueue ??= []
@@ -66,7 +74,7 @@ export class BrowserKindyRepository implements KindyRepository {
       return
     }
 
-    this.data = import.meta.env.DEV ? clone(demoData) : emptyData()
+    this.data = import.meta.env.DEV ? await loadDemoData() : emptyData()
     await this.persist()
   }
 
