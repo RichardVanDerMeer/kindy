@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Check, Search } from '@lucide/vue'
 
 import { connectionRoles } from '@/domain/connections'
-import { normalizeText } from '@/domain/duplicates'
 import type { Person, RelationshipRole } from '@/domain/model'
 
-import PersonAvatar from './PersonAvatar.vue'
+import PersonPicker from './PersonPicker.vue'
 
 const props = defineProps<{
   open: boolean
@@ -20,27 +18,21 @@ const emit = defineEmits<{
 }>()
 
 const role = ref<RelationshipRole>('friend')
-const personId = ref<string>()
-const query = ref('')
+const selected = ref<string[]>([])
+const personId = computed(() => selected.value[0])
 
 watch(
   () => props.open,
   (isOpen) => {
     if (!isOpen) return
     role.value = 'friend'
-    personId.value = undefined
-    query.value = ''
+    selected.value = []
   },
 )
 
-const filtered = computed(() => {
-  const normalized = normalizeText(query.value)
-  return props.candidates.filter(
-    (person) =>
-      person.id !== props.subject.id &&
-      (!normalized || normalizeText(person.displayName).includes(normalized)),
-  )
-})
+const candidates = computed(() =>
+  props.candidates.filter((person) => person.id !== props.subject.id),
+)
 
 function submit(): void {
   if (personId.value) emit('save', { personId: personId.value, role: role.value })
@@ -75,31 +67,7 @@ function submit(): void {
         </div>
 
         <p class="dialog-question">{{ $t('connections.choosePerson') }}</p>
-        <label class="search-field search-field--compact">
-          <Search :size="18" aria-hidden="true" />
-          <span class="sr-only">{{ $t('connections.searchPerson') }}</span>
-          <input v-model="query" type="search" :placeholder="$t('connections.searchPerson')" />
-        </label>
-        <div class="choice-list choice-list--people">
-          <button
-            v-for="person in filtered"
-            :key="person.id"
-            type="button"
-            class="choice-row"
-            role="radio"
-            :aria-checked="personId === person.id"
-            @click="personId = person.id"
-          >
-            <PersonAvatar
-              :name="person.displayName"
-              :photo-ref="person.photoRef"
-              :deceased="person.isDeceased"
-              size="tiny"
-            />
-            <strong>{{ person.displayName }}</strong>
-            <span class="selection-check"><Check v-if="personId === person.id" :size="16" /></span>
-          </button>
-        </div>
+        <PersonPicker v-model="selected" :candidates="candidates" :max="1" />
 
         <p v-if="error" class="form-error" role="alert">{{ error }}</p>
         <div class="dialog__actions">

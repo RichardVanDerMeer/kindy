@@ -39,7 +39,7 @@ async function save(circle: Circle): Promise<void> {
         v-for="circle in ordered"
         :key="circle.id"
         :circle="circle"
-        @open="router.push({ path: '/people', query: { circle: circle.id } })"
+        @open="router.push(`/circles/${circle.id}`)"
         @edit="edit(circle)"
       />
     </div>

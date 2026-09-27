@@ -4,10 +4,15 @@ import {
   ArrowLeft,
   Bell,
   BriefcaseBusiness,
+  Cake,
   CalendarDays,
   ChevronRight,
+  Flower2,
   Heart,
+  Mail,
+  MessageCircle,
   NotebookPen,
+  Phone,
   Plus,
   Sparkles,
   Star,
@@ -19,22 +24,28 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import AddConnectionDialog from '@/components/AddConnectionDialog.vue'
+import AddNoteDialog from '@/components/AddNoteDialog.vue'
 import CirclePickerDialog from '@/components/CirclePickerDialog.vue'
 import PersonAvatar from '@/components/PersonAvatar.vue'
 import RelationshipDiagram from '@/components/RelationshipDiagram.vue'
+import { calendarDay } from '@/domain/agenda'
 import { inferGender, relationshipViewFor, siblingIds } from '@/domain/connections'
 import { ageBetween, formatPartialDate } from '@/domain/dates'
-import type { Person, RelationshipRole } from '@/domain/model'
+import type { PartialDate, Person, RelationshipRole } from '@/domain/model'
 import { connectedPersonId } from '@/domain/relationships'
+import { personTimeline, type TimelineEntry } from '@/domain/timeline'
 import { useKindyStore } from '@/stores/kindy'
+
+type Tab = 'overview' | 'notes' | 'connections' | 'timeline'
 
 const props = defineProps<{ id: string }>()
 const store = useKindyStore()
 const router = useRouter()
 const { locale, t } = useI18n()
-const activeTab = ref<'overview' | 'notes' | 'connections' | 'timeline'>('overview')
+const activeTab = ref<Tab>('overview')
 const showCirclePicker = ref(false)
 const showAddConnection = ref(false)
+const showAddNote = ref(false)
 const connectionError = ref<string>()
 
 watch(
@@ -100,11 +111,6 @@ const diagramRelationships = computed(() => [
   ...siblings.value,
 ])
 
-const interactions = computed(() =>
-  (store.data?.interactions ?? [])
-    .filter((interaction) => interaction.personIds.includes(props.id))
-    .sort((left, right) => right.occurredAt - left.occurredAt),
-)
 const circles = computed(() => store.circleMemberships(props.id))
 const reminder = computed(() =>
   store.data?.reminders.find(
@@ -115,9 +121,99 @@ const ageAtDeath = computed(() => {
   if (!person.value?.birthDate || !person.value.deathDate) return null
   return ageBetween(person.value.birthDate, person.value.deathDate)
 })
+const age = computed(() => {
+  if (!person.value?.birthDate || person.value.isDeceased) return null
+  return ageBetween(person.value.birthDate, calendarDay(new Date()))
+})
 
-function formatDate(date: NonNullable<Person['birthDate']>): string {
+const phones = computed(
+  () => person.value?.contactPoints.filter((point) => point.kind === 'phone') ?? [],
+)
+const emails = computed(
+  () => person.value?.contactPoints.filter((point) => point.kind === 'email') ?? [],
+)
+const otherContacts = computed(
+  () =>
+    person.value?.contactPoints.filter(
+      (point) => point.kind === 'address' || point.kind === 'url',
+    ) ?? [],
+)
+
+/** Wedding days this person shares, with the partner(s) on the other side. */
+const weddings = computed(() =>
+  (store.data?.events ?? [])
+    .filter((event) => event.type === 'wedding-anniversary' && event.personIds.includes(props.id))
+    .map((event) => ({
+      id: event.id,
+      date: event.date,
+      partners: event.personIds
+        .filter((id) => id !== props.id)
+        .map((id) => store.personById(id))
+        .filter((partner): partner is Person => Boolean(partner)),
+    })),
+)
+
+const hasDetails = computed(
+  () =>
+    Boolean(person.value?.details.length) ||
+    Boolean(person.value?.contactPoints.length) ||
+    Boolean(person.value?.birthDate && !person.value.isDeceased) ||
+    weddings.value.length > 0,
+)
+
+const timeline = computed(() =>
+  store.data ? personTimeline(props.id, store.data) : { dated: [], undated: [] },
+)
+
+function formatDate(date: PartialDate): string {
   return formatPartialDate(date, locale.value)
+}
+
+function whatsapp(value: string): string {
+  return `https://wa.me/${value.replace(/[^\d]/g, '')}`
+}
+
+function timelineTitle(entry: TimelineEntry): string {
+  const names = entry.otherPersonIds
+    .map((id) => {
+      const other = store.personById(id)
+      return other?.givenName ?? other?.displayName
+    })
+    .filter(Boolean)
+    .join(' & ')
+  switch (entry.kind) {
+    case 'born':
+      return t('timeline.born')
+    case 'died':
+      return t('timeline.died')
+    case 'married':
+      return names ? t('timeline.marriedTo', { names }) : t('timeline.married')
+    default:
+      return entry.title ?? t(`timeline.${entry.kind}`)
+  }
+}
+
+function timelineIcon(entry: TimelineEntry) {
+  switch (entry.kind) {
+    case 'born':
+      return Cake
+    case 'married':
+    case 'anniversary':
+      return Heart
+    case 'died':
+      return Flower2
+    case 'memo':
+      return Bell
+    default:
+      return CalendarDays
+  }
+}
+
+function timelinePeople(entry: TimelineEntry): Person[] {
+  if (entry.kind !== 'married' && entry.kind !== 'anniversary') return []
+  return [props.id, ...entry.otherPersonIds]
+    .map((id) => store.personById(id))
+    .filter((candidate): candidate is Person => Boolean(candidate))
 }
 
 async function saveCircles(circleIds: string[]): Promise<void> {
@@ -137,6 +233,11 @@ async function addConnection(input: { personId: string; role: RelationshipRole }
   } catch {
     connectionError.value = t('connections.exists')
   }
+}
+
+async function saveNote(input: { body: string; occurredAt: number }): Promise<void> {
+  await store.addNote({ personIds: [props.id], ...input })
+  showAddNote.value = false
 }
 </script>
 
@@ -187,14 +288,15 @@ async function addConnection(input: { personId: string; role: RelationshipRole }
           <UserRoundCheck :size="15" /> {{ $t('profile.markAsMe') }}
         </button>
         <div class="filter-row profile-circles">
-          <span
+          <RouterLink
             v-for="membership in circles"
             :key="membership.circleId"
             class="chip"
             :class="`chip--${membership.circle?.colorToken ?? 'neutral'}`"
+            :to="`/circles/${membership.circleId}`"
           >
             {{ membership.circle?.name }}
-          </span>
+          </RouterLink>
           <button class="chip chip--add" @click="showCirclePicker = true">
             <Plus :size="16" /> {{ $t('profile.addCircle') }}
           </button>
@@ -245,13 +347,110 @@ async function addConnection(input: { personId: string; role: RelationshipRole }
 
       <article class="card profile-card">
         <h2>{{ $t('profile.details') }}</h2>
-        <p v-if="!person.details.length" class="muted">{{ $t('profile.noDetails') }}</p>
+        <p v-if="!hasDetails" class="muted">{{ $t('profile.noDetails') }}</p>
+
+        <div v-if="person.birthDate && !person.isDeceased" class="detail-row">
+          <Cake :size="20" />
+          <span>{{ $t('profile.birthDate') }}</span>
+          <strong>
+            {{ formatDate(person.birthDate) }}
+            <small v-if="age !== null" class="detail-meta">{{
+              $t('memorial.years', { count: age })
+            }}</small>
+          </strong>
+        </div>
+
+        <div v-for="wedding in weddings" :key="wedding.id" class="detail-row">
+          <Heart :size="20" />
+          <span>{{ $t('profile.weddingDay') }}</span>
+          <strong class="detail-with-people">
+            <span>{{ formatDate(wedding.date) }}</span>
+            <span
+              class="avatar-pair"
+              :aria-label="wedding.partners.map((partner) => partner.displayName).join(', ')"
+            >
+              <PersonAvatar
+                :name="person.displayName"
+                :photo-ref="person.photoRef"
+                :deceased="person.isDeceased"
+                size="tiny"
+              />
+              <PersonAvatar
+                v-for="partner in wedding.partners"
+                :key="partner.id"
+                :name="partner.displayName"
+                :photo-ref="partner.photoRef"
+                :deceased="partner.isDeceased"
+                size="tiny"
+              />
+            </span>
+          </strong>
+        </div>
+
+        <div v-for="point in phones" :key="point.id" class="detail-row detail-row--contact">
+          <Phone :size="20" />
+          <span>{{ point.label }}</span>
+          <strong class="detail-with-actions">
+            <a :href="`tel:${point.value}`">{{ point.value }}</a>
+            <span v-if="!person.isDeceased" class="detail-actions">
+              <a
+                class="contact-action"
+                :href="`tel:${point.value}`"
+                :aria-label="$t('upcoming.call', { name: person.givenName ?? person.displayName })"
+                ><Phone :size="17"
+              /></a>
+              <a
+                class="contact-action contact-action--whatsapp"
+                :href="whatsapp(point.value)"
+                target="_blank"
+                rel="noopener"
+                :aria-label="
+                  $t('upcoming.whatsapp', { name: person.givenName ?? person.displayName })
+                "
+                ><MessageCircle :size="17"
+              /></a>
+            </span>
+          </strong>
+        </div>
+
+        <div v-for="point in emails" :key="point.id" class="detail-row detail-row--contact">
+          <Mail :size="20" />
+          <span>{{ point.label }}</span>
+          <strong class="detail-with-actions">
+            <a :href="`mailto:${point.value}`">{{ point.value }}</a>
+          </strong>
+        </div>
+
+        <div v-for="point in otherContacts" :key="point.id" class="detail-row">
+          <Heart :size="20" />
+          <span>{{ point.label }}</span>
+          <strong>{{ point.value }}</strong>
+        </div>
+
         <div v-for="detail in person.details" :key="detail.id" class="detail-row">
           <BriefcaseBusiness v-if="detail.definitionId === 'occupation'" :size="20" />
           <Heart v-else :size="20" />
           <span>{{ detail.label }}</span>
           <strong>{{ detail.value }}</strong>
         </div>
+      </article>
+
+      <article class="card note-card note-card--preview">
+        <div class="card-heading-row">
+          <h2>{{ notes[0] ? $t('profile.latestNote') : $t('profile.notes') }}</h2>
+          <time v-if="notes[0]">{{
+            new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(notes[0].occurredAt)
+          }}</time>
+        </div>
+        <p v-if="notes[0]">{{ notes[0].body }}</p>
+        <p v-else class="muted">{{ $t('profile.noNotes') }}</p>
+        <button class="inline-action" @click="activeTab = 'notes'">
+          <NotebookPen :size="18" />
+          {{
+            notes.length ? $t('profile.allNotes', { count: notes.length }) : $t('profile.toNotes')
+          }}
+          <ChevronRight :size="16" />
+        </button>
       </article>
 
       <article class="card profile-card">
@@ -281,16 +480,6 @@ async function addConnection(input: { personId: string; role: RelationshipRole }
         </button>
       </article>
 
-      <article v-if="notes[0]" class="card note-card">
-        <div class="card-heading-row">
-          <h2>{{ $t('profile.latestNote') }}</h2>
-          <time>{{
-            new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(notes[0].occurredAt)
-          }}</time>
-        </div>
-        <p>{{ notes[0].body }}</p>
-      </article>
-
       <RouterLink v-if="reminder && !person.isDeceased" class="reminder-callout" to="/upcoming">
         <Bell :size="20" />
         <span>{{ reminder.title }}</span>
@@ -299,6 +488,9 @@ async function addConnection(input: { personId: string; role: RelationshipRole }
     </div>
 
     <div v-else-if="activeTab === 'notes'" class="profile-content">
+      <button class="wide-action wide-action--top" @click="showAddNote = true">
+        <NotebookPen :size="21" /> {{ $t('profile.addNote') }}
+      </button>
       <article v-for="note in notes" :key="note.id" class="card note-card">
         <time>{{
           new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(note.occurredAt)
@@ -349,14 +541,47 @@ async function addConnection(input: { personId: string; role: RelationshipRole }
     </div>
 
     <div v-else class="profile-content">
-      <article v-for="interaction in interactions" :key="interaction.id" class="card">
-        <strong>{{ interaction.type }}</strong>
-        <p>{{ interaction.summary }}</p>
-      </article>
-      <p v-if="!interactions.length" class="empty-copy">{{ $t('profile.timeline') }}</p>
+      <ol v-if="timeline.dated.length" class="life-timeline">
+        <li
+          v-for="entry in timeline.dated"
+          :key="entry.id"
+          class="life-timeline__entry"
+          :class="`life-timeline__entry--${entry.kind}`"
+        >
+          <span class="life-timeline__dot" aria-hidden="true">
+            <component :is="timelineIcon(entry)" :size="15" />
+          </span>
+          <div class="life-timeline__body card">
+            <time>{{ formatDate(entry.date) }}</time>
+            <strong>{{ timelineTitle(entry) }}</strong>
+            <span v-if="timelinePeople(entry).length > 1" class="avatar-pair">
+              <PersonAvatar
+                v-for="participant in timelinePeople(entry)"
+                :key="participant.id"
+                :name="participant.displayName"
+                :photo-ref="participant.photoRef"
+                :deceased="participant.isDeceased"
+                size="tiny"
+              />
+            </span>
+          </div>
+        </li>
+      </ol>
+      <template v-if="timeline.undated.length">
+        <h2 class="section-title">{{ $t('timeline.withoutYear') }}</h2>
+        <article
+          v-for="entry in timeline.undated"
+          :key="entry.id"
+          class="card life-timeline__body life-timeline__body--undated"
+        >
+          <time>{{ formatDate(entry.date) }}</time>
+          <strong>{{ timelineTitle(entry) }}</strong>
+        </article>
+      </template>
+      <p v-if="!timeline.dated.length && !timeline.undated.length" class="empty-copy">
+        {{ $t('timeline.empty') }}
+      </p>
     </div>
-
-    <button class="wide-action"><NotebookPen :size="21" /> {{ $t('profile.addNote') }}</button>
 
     <CirclePickerDialog
       :open="showCirclePicker"
@@ -373,6 +598,12 @@ async function addConnection(input: { personId: string; role: RelationshipRole }
       :error="connectionError"
       @close="showAddConnection = false"
       @save="addConnection"
+    />
+    <AddNoteDialog
+      :open="showAddNote"
+      :person-name="person.givenName ?? person.displayName"
+      @close="showAddNote = false"
+      @save="saveNote"
     />
   </section>
   <section v-else class="center-state">

@@ -25,6 +25,13 @@ const people = computed(() =>
 )
 /** The person to open and contact: skip the user themselves, e.g. on a shared wedding day. */
 const primary = computed(() => people.value.find((person) => !person.isSelf) ?? people.value[0])
+/** Wedding days and anniversaries show both partners when both are known. */
+const couple = computed(() =>
+  (props.item.kind === 'wedding-anniversary' || props.item.kind === 'anniversary') &&
+  people.value.length >= 2
+    ? people.value.slice(0, 2)
+    : undefined,
+)
 const firstName = (person: Person) => person.givenName ?? person.displayName
 
 const title = computed(() => {
@@ -102,9 +109,19 @@ function open(): void {
         <strong>{{ new Intl.DateTimeFormat(locale, { day: 'numeric' }).format(date) }}</strong>
         <span>{{ new Intl.DateTimeFormat(locale, { month: 'short' }).format(date) }}</span>
       </span>
-      <span class="agenda-card__visual">
+      <span class="agenda-card__visual" :class="{ 'agenda-card__visual--pair': couple }">
+        <span v-if="couple" class="avatar-pair">
+          <PersonAvatar
+            v-for="partner in couple"
+            :key="partner.id"
+            :name="partner.displayName"
+            :photo-ref="partner.photoRef"
+            :deceased="partner.isDeceased"
+            size="tiny"
+          />
+        </span>
         <PersonAvatar
-          v-if="primary"
+          v-else-if="primary"
           :name="primary.displayName"
           :photo-ref="primary.photoRef"
           :deceased="primary.isDeceased"

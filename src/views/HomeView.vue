@@ -107,7 +107,7 @@ function subtitle(person: Person): string {
             :key="circle.id"
             :circle="circle"
             compact
-            @open="router.push({ path: '/people', query: { circle: circle.id } })"
+            @open="router.push(`/circles/${circle.id}`)"
           />
         </div>
         <p v-else class="empty-copy card">{{ $t('home.noFavoriteCircles') }}</p>

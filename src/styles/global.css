@@ -1850,9 +1850,11 @@ button.connection-person:focus-visible {
 }
 
 .agenda-card__copy strong {
+  display: -webkit-box;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .agenda-card__when,
@@ -2255,4 +2257,273 @@ button.connection-person:focus-visible {
 .status-pill--muted {
   background: #f2eef7;
   color: var(--color-text-muted);
+}
+
+/* Circle detail */
+
+.circle-hero {
+  position: relative;
+  display: flex;
+  min-height: 190px;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: var(--space-4);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: var(--radius-large);
+  box-shadow: var(--shadow-card);
+  isolation: isolate;
+}
+
+.circle-hero__copy h1 {
+  margin: var(--space-4) 0 var(--space-1);
+  font-size: clamp(1.9rem, 8vw, 2.4rem);
+}
+
+.circle-hero__copy p {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.member-star {
+  flex: 0 0 auto;
+  color: var(--color-primary);
+}
+
+a.chip {
+  text-decoration: none;
+}
+
+/* Two avatars side by side, e.g. a married couple */
+
+.avatar-pair {
+  display: inline-flex;
+  align-items: center;
+}
+
+.avatar-pair .avatar + .avatar {
+  margin-left: -10px;
+}
+
+.agenda-card__visual--pair {
+  display: flex;
+  width: 62px;
+  justify-content: center;
+}
+
+.agenda-card__visual--pair .agenda-card__badge {
+  right: 6px;
+}
+
+/* Forms */
+
+.field textarea,
+.field select,
+.partial-date select,
+.partial-date input {
+  min-height: 50px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  outline: 0;
+  background: #f8f5f9;
+  font: inherit;
+  font-weight: 400;
+}
+
+.field textarea {
+  padding: var(--space-3);
+  resize: vertical;
+}
+
+.field textarea:focus,
+.partial-date select:focus,
+.partial-date input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(124, 77, 255, 0.15);
+}
+
+.partial-date {
+  display: grid;
+  grid-template-columns: 0.8fr 1.5fr 1.2fr;
+  gap: var(--space-2);
+}
+
+.partial-date label,
+.partial-date select,
+.partial-date input {
+  width: 100%;
+  min-width: 0;
+}
+
+.dialog-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: calc(var(--space-2) * -1) 0 var(--space-2) calc(var(--space-3) * -1);
+}
+
+.dialog-title-row h2 {
+  margin: 0;
+}
+
+.choice-row--large {
+  min-height: 68px;
+}
+
+.choice-row__copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.choice-row__copy small {
+  color: var(--color-text-muted);
+}
+
+/* Person details */
+
+.detail-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.detail-row a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.detail-meta {
+  margin-left: 6px;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.detail-with-people,
+.detail-with-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.detail-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.detail-actions .contact-action {
+  width: 38px;
+  height: 38px;
+}
+
+.note-card--preview .inline-action {
+  margin-top: 0;
+}
+
+.wide-action--top {
+  margin-top: 0;
+}
+
+/* Life timeline */
+
+.life-timeline {
+  position: relative;
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0 0 0 34px;
+  list-style: none;
+}
+
+.life-timeline::before {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 13px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(124, 77, 255, 0.35), rgba(124, 77, 255, 0.08));
+  content: '';
+}
+
+.life-timeline__entry {
+  position: relative;
+}
+
+.life-timeline__dot {
+  position: absolute;
+  top: 14px;
+  left: -34px;
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid var(--color-surface-solid);
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.life-timeline__entry--born .life-timeline__dot {
+  background: #e98a6a;
+}
+
+.life-timeline__entry--married .life-timeline__dot {
+  background: #d65f8f;
+}
+
+.life-timeline__entry--died .life-timeline__dot {
+  background: #8c7ba3;
+}
+
+.life-timeline__body {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-3) var(--space-4);
+}
+
+.life-timeline__body time {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.life-timeline__body .avatar-pair {
+  margin-top: var(--space-2);
+}
+
+.life-timeline__body--undated {
+  margin-bottom: var(--space-2);
+}
+
+button.section-link {
+  border: 0;
+  background: transparent;
+}
+
+/* Stacked detail rows: a small label above the value reads better on a phone. */
+.detail-row {
+  grid-template-areas:
+    'icon label'
+    'icon value';
+  grid-template-columns: 24px minmax(0, 1fr);
+  row-gap: 0;
+  padding: var(--space-2) 0;
+}
+
+.detail-row > svg {
+  grid-area: icon;
+  align-self: center;
+}
+
+.detail-row > span {
+  grid-area: label;
+  font-size: 0.8rem;
+}
+
+.detail-row > strong {
+  grid-area: value;
 }

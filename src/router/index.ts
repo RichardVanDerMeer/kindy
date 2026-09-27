@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import CirclesView from '@/views/CirclesView.vue'
+import CircleView from '@/views/CircleView.vue'
 import HomeView from '@/views/HomeView.vue'
 import PeopleView from '@/views/PeopleView.vue'
 import PersonView from '@/views/PersonView.vue'
@@ -20,6 +21,13 @@ const router = createRouter({
       meta: { showNavigation: false },
     },
     { path: '/circles', name: 'circles', component: CirclesView },
+    {
+      path: '/circles/:id',
+      name: 'circle',
+      component: CircleView,
+      props: true,
+      meta: { showNavigation: false },
+    },
     { path: '/upcoming', name: 'upcoming', component: UpcomingView },
     { path: '/search', redirect: '/' },
     {

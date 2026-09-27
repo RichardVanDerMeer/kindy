@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 
 import { buildAgenda, calendarDay } from '@/domain/agenda'
 import { createConnection } from '@/domain/connections'
-import type { Circle, KindyData, Person, RelationshipRole } from '@/domain/model'
+import type { Circle, KindyData, PartialDate, Person, RelationshipRole } from '@/domain/model'
 import type { ExternalContactsConnection, ExternalContactSnapshot } from '@/domain/ports'
 import { getKindyRepository } from '@/infrastructure/repositories/repository'
 
@@ -59,6 +59,8 @@ export const useKindyStore = defineStore('kindy', () => {
    * dataset, which is fine for the current demo phase; targeted repository
    * writes should replace it before larger datasets.
    */
+  // Callers pass values from reactive form state; copy them (as the actions below do)
+  // because Vue proxies cannot be structured-cloned into storage.
   async function mutate(change: (draft: KindyData) => void): Promise<void> {
     const next = await repository.getData()
     change(next)
@@ -233,6 +235,91 @@ export const useKindyStore = defineStore('kindy', () => {
     })
   }
 
+  async function setCircleMembers(circleId: string, personIds: string[]): Promise<void> {
+    await mutate((draft) => {
+      draft.memberships = draft.memberships.filter(
+        (membership) =>
+          membership.circleId !== circleId ||
+          membership.endedOn ||
+          personIds.includes(membership.personId),
+      )
+      for (const personId of personIds) {
+        const exists = draft.memberships.some(
+          (membership) =>
+            membership.circleId === circleId &&
+            membership.personId === personId &&
+            !membership.endedOn,
+        )
+        if (!exists) draft.memberships.push({ circleId, personId })
+      }
+    })
+  }
+
+  async function addNote(input: {
+    personIds: string[]
+    body: string
+    occurredAt: number
+  }): Promise<void> {
+    const now = Date.now()
+    await mutate((draft) => {
+      draft.notes.push({
+        id: crypto.randomUUID(),
+        body: input.body.trim(),
+        personIds: [...input.personIds],
+        occurredAt: input.occurredAt,
+        isPinned: false,
+        createdAt: now,
+        updatedAt: now,
+      })
+    })
+  }
+
+  /** A dated memo for Upcoming: a one-time reminder on that day at 09:00 local time. */
+  async function addMemo(input: { personId: string; text: string; date: string }): Promise<void> {
+    const localDateTime = `${input.date}T09:00:00`
+    const reminderId = crypto.randomUUID()
+    await mutate((draft) => {
+      draft.reminders.push({
+        id: reminderId,
+        personId: input.personId,
+        title: input.text.trim(),
+        localDateTime,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        recurrence: { kind: 'once' },
+        notificationOffsetsMinutes: [0],
+        isCancelled: false,
+      })
+      draft.reminderOccurrences.push({
+        id: crypto.randomUUID(),
+        reminderId,
+        dueAt: new Date(localDateTime).getTime(),
+        state: 'scheduled',
+      })
+    })
+  }
+
+  async function setBirthDate(personId: string, birthDate: PartialDate): Promise<void> {
+    await mutate((draft) => {
+      const person = draft.people.find((candidate) => candidate.id === personId)
+      if (!person) return
+      person.birthDate = { ...birthDate }
+      person.updatedAt = Date.now()
+    })
+  }
+
+  async function addWeddingAnniversary(personIds: string[], date: PartialDate): Promise<void> {
+    await mutate((draft) => {
+      draft.events.push({
+        id: crypto.randomUUID(),
+        type: 'wedding-anniversary',
+        title: 'Trouwdag',
+        date: { ...date },
+        personIds: [...personIds],
+        source: 'kindy',
+      })
+    })
+  }
+
   async function resetDemoData(): Promise<void> {
     if (!import.meta.env.DEV) return
     const { demoData } = await import('@/fixtures/demo')
@@ -289,6 +376,11 @@ export const useKindyStore = defineStore('kindy', () => {
     setPersonCircles,
     addConnection,
     removeConnection,
+    setCircleMembers,
+    addNote,
+    addMemo,
+    setBirthDate,
+    addWeddingAnniversary,
     resetDemoData,
     importExternalContacts,
     search,

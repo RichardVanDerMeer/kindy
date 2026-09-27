@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ChevronDown, ChevronUp } from '@lucide/vue'
+import { ChevronDown, ChevronUp, Plus } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 
+import AddAgendaItemDialog, { type AgendaDraft } from '@/components/AddAgendaItemDialog.vue'
 import AgendaCard from '@/components/AgendaCard.vue'
 import ViewHeader from '@/components/ViewHeader.vue'
 import { agendaFilterFor, agendaFilters, type AgendaFilter, type AgendaItem } from '@/domain/agenda'
@@ -13,6 +14,14 @@ const { t, locale } = useI18n()
 
 const active = ref<Set<AgendaFilter>>(new Set(agendaFilters))
 const showEarlier = ref(false)
+const showAdd = ref(false)
+
+async function save(draft: AgendaDraft): Promise<void> {
+  if (draft.kind === 'memo') await store.addMemo(draft)
+  else if (draft.kind === 'birthday') await store.setBirthDate(draft.personId, draft.date)
+  else await store.addWeddingAnniversary(draft.personIds, draft.date)
+  showAdd.value = false
+}
 
 function toggle(filter: AgendaFilter): void {
   const next = new Set(active.value)
@@ -98,5 +107,15 @@ const groups = computed(() => {
     <div v-if="!groups.length" class="empty-state card">
       <h2>{{ $t('upcoming.empty') }}</h2>
     </div>
+
+    <button class="floating-action" :aria-label="$t('agendaAdd.title')" @click="showAdd = true">
+      <Plus :size="32" />
+    </button>
+    <AddAgendaItemDialog
+      :open="showAdd"
+      :candidates="store.people"
+      @close="showAdd = false"
+      @save="save"
+    />
   </section>
 </template>

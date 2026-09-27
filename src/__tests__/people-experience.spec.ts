@@ -4,6 +4,7 @@ import { agendaFilterFor, buildAgenda } from '@/domain/agenda'
 import { circleAvatarStack } from '@/domain/circles'
 import { createConnection, inferGender, siblingIds } from '@/domain/connections'
 import type { KindyData, Person, Relationship } from '@/domain/model'
+import { personTimeline } from '@/domain/timeline'
 
 function person(id: string, overrides: Partial<Person> = {}): Person {
   return {
@@ -154,5 +155,45 @@ describe('circle avatar stack', () => {
     const stack = circleAvatarStack([person('a'), person('b')], 6)
     expect(stack).toMatchObject({ overflow: 0 })
     expect(stack.shown).toHaveLength(2)
+  })
+})
+
+describe('person timeline', () => {
+  it('orders life events newest first and keeps dates without a year apart', () => {
+    const timeline = personTimeline(
+      'henk',
+      data({
+        people: [
+          person('henk', {
+            isDeceased: true,
+            birthDate: { year: 1948, month: 2, day: 3 },
+            deathDate: { year: 2024, month: 5, day: 14 },
+          }),
+          person('els'),
+        ],
+        events: [
+          {
+            id: 'wedding',
+            type: 'wedding-anniversary',
+            title: 'Trouwdag',
+            date: { year: 1975, month: 6, day: 12 },
+            personIds: ['henk', 'els'],
+            source: 'kindy',
+          },
+          {
+            id: 'club',
+            type: 'anniversary',
+            title: 'Lid van de club',
+            date: { year: null, month: 9, day: 1 },
+            personIds: ['henk'],
+            source: 'kindy',
+          },
+        ],
+      }),
+    )
+
+    expect(timeline.dated.map((entry) => entry.kind)).toEqual(['died', 'married', 'born'])
+    expect(timeline.dated[1]?.otherPersonIds).toEqual(['els'])
+    expect(timeline.undated.map((entry) => entry.kind)).toEqual(['anniversary'])
   })
 })
