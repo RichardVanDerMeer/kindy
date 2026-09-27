@@ -2,10 +2,26 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { buildAgenda, calendarDay } from '@/domain/agenda'
+import { createBackup, isWorthBackingUp, readBackup } from '@/domain/backup'
 import { createConnection } from '@/domain/connections'
 import { enqueueSync, importedContactDates, managedContactFields } from '@/domain/contactSync'
-import type { Circle, KindyData, PartialDate, Person, RelationshipRole } from '@/domain/model'
-import type { ExternalContactsConnection, ExternalContactSnapshot } from '@/domain/ports'
+import {
+  KINDY_SCHEMA_VERSION,
+  type Circle,
+  type KindyData,
+  type PartialDate,
+  type Person,
+  type RelationshipRole,
+} from '@/domain/model'
+import type {
+  CloudBackupInfo,
+  ExternalContactsConnection,
+  ExternalContactSnapshot,
+} from '@/domain/ports'
+import {
+  getCloudBackupGateway,
+  NotConnectedError,
+} from '@/infrastructure/backup/googleDriveBackupGateway'
 import { getGoogleContactsGateway } from '@/infrastructure/contacts/googleContactsGateway'
 import { getKindyRepository } from '@/infrastructure/repositories/repository'
 import { runContactSync } from '@/infrastructure/sync/contactSyncRunner'
@@ -13,6 +29,21 @@ import { i18n } from '@/locales'
 
 const repository = getKindyRepository()
 const WRITE_BACK_KEY = 'kindy.google.writeBack'
+const LAST_BACKUP_KEY = 'kindy.backup.lastAt'
+const DAY = 86_400_000
+/** Wait for a quiet moment after changes, so a burst of edits makes one backup. */
+const BACKUP_DELAY = 30_000
+
+function readLastBackup(): number | null {
+  try {
+    const value = Number(localStorage.getItem(LAST_BACKUP_KEY))
+    return Number.isFinite(value) && value > 0 ? value : null
+  } catch {
+    return null
+  }
+}
+
+export type BackupState = 'idle' | 'running' | 'failed' | 'not-connected'
 
 function readWriteBack(): boolean {
   try {
@@ -39,6 +70,9 @@ export const useKindyStore = defineStore('kindy', () => {
   const today = ref(calendarDay(new Date()))
   const googleWriteBack = ref(readWriteBack())
   const googleSyncing = ref(false)
+  const lastBackupAt = ref(readLastBackup())
+  const backupState = ref<BackupState>('idle')
+  let backupTimer: ReturnType<typeof setTimeout> | undefined
 
   const people = computed(() =>
     (data.value?.people ?? [])
@@ -73,6 +107,8 @@ export const useKindyStore = defineStore('kindy', () => {
       initialized.value = true
       window.addEventListener('online', () => void syncGoogle())
       void syncGoogle()
+      // At least one backup a day while Kindy is used.
+      if (!lastBackupAt.value || Date.now() - lastBackupAt.value > DAY) scheduleBackup(5_000)
     } catch (caught) {
       error.value = caught instanceof Error ? caught.message : String(caught)
     } finally {
@@ -97,6 +133,58 @@ export const useKindyStore = defineStore('kindy', () => {
     change(next)
     await repository.replaceData(next)
     await refresh()
+    scheduleBackup()
+  }
+
+  function scheduleBackup(delay = BACKUP_DELAY): void {
+    clearTimeout(backupTimer)
+    backupTimer = setTimeout(() => void backupNow(), delay)
+  }
+
+  function rememberBackup(at: number): void {
+    lastBackupAt.value = at
+    try {
+      localStorage.setItem(LAST_BACKUP_KEY, String(at))
+    } catch {
+      // Only the "last backup" label is affected.
+    }
+  }
+
+  /** Uploads the full Kindy data to the Google Drive app folder. */
+  async function backupNow(): Promise<void> {
+    clearTimeout(backupTimer)
+    if (backupState.value === 'running' || !initialized.value) return
+    const snapshot = await repository.getData()
+    if (!isWorthBackingUp(snapshot)) return
+    backupState.value = 'running'
+    try {
+      const info = await getCloudBackupGateway().upload(createBackup(snapshot, Date.now()))
+      rememberBackup(info.modifiedAt)
+      backupState.value = 'idle'
+    } catch (caught) {
+      backupState.value = caught instanceof NotConnectedError ? 'not-connected' : 'failed'
+    }
+  }
+
+  /**
+   * Looks for a backup. With `connect`, Google's sign-in is shown first when
+   * needed, as on a new phone where nothing is linked yet.
+   */
+  async function findCloudBackup(connect = false): Promise<CloudBackupInfo | null> {
+    if (connect) await getGoogleContactsGateway().authorize()
+    return getCloudBackupGateway().latest()
+  }
+
+  /** Replaces all local Kindy data with the backup, after validating it. */
+  async function restoreFromCloud(backupId: string): Promise<void> {
+    const content = await getCloudBackupGateway().download(backupId)
+    const backup = readBackup(content, KINDY_SCHEMA_VERSION)
+    clearTimeout(backupTimer)
+    await repository.replaceData(backup.data)
+    await refresh()
+    rememberBackup(backup.createdAt || Date.now())
+    backupState.value = 'idle'
+    void syncGoogle()
   }
 
   function isLinked(draft: KindyData, personId: string): boolean {
@@ -192,6 +280,7 @@ export const useKindyStore = defineStore('kindy', () => {
   async function savePerson(person: Person): Promise<void> {
     await repository.savePerson(person)
     await refresh()
+    scheduleBackup()
   }
 
   async function addPerson(input: {
@@ -325,6 +414,7 @@ export const useKindyStore = defineStore('kindy', () => {
 
     await repository.replaceData(next)
     await refresh()
+    scheduleBackup()
     return { imported, skipped }
   }
 
@@ -538,6 +628,8 @@ export const useKindyStore = defineStore('kindy', () => {
     googleSyncing,
     googleLinked,
     pendingSyncCount,
+    lastBackupAt,
+    backupState,
     initialize,
     refresh,
     lock,
@@ -561,6 +653,9 @@ export const useKindyStore = defineStore('kindy', () => {
     retryContactSync,
     saveToGoogle,
     setGoogleWriteBack,
+    backupNow,
+    findCloudBackup,
+    restoreFromCloud,
     resetDemoData,
     importExternalContacts,
     search,

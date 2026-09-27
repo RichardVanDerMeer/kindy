@@ -24,7 +24,20 @@ interface GoogleContactsPlugin {
     person: GoogleWritablePerson
   }): Promise<GoogleWritablePerson>
   createContact(options: { person: GoogleWritablePerson }): Promise<GoogleWritablePerson>
+  findBackup(options: { name: string }): Promise<{ file?: GoogleDriveFile }>
+  uploadBackup(options: {
+    name: string
+    fileId?: string
+    content: string
+  }): Promise<GoogleDriveFile>
+  downloadBackup(options: { fileId: string }): Promise<{ content: string }>
   revoke(): Promise<void>
+}
+
+export interface GoogleDriveFile {
+  id: string
+  modifiedTime?: string
+  size?: string
 }
 
 /** The subset of a People API person that Kindy reads back or writes. */
@@ -91,7 +104,9 @@ interface GoogleFieldMetadata {
   source?: { id?: string }
 }
 
-const nativePlugin = registerPlugin<GoogleContactsPlugin>('KindyGoogleContacts')
+/** The one native Google plugin: it holds the account token for Contacts and Drive. */
+export const nativeGooglePlugin = registerPlugin<GoogleContactsPlugin>('KindyGoogleContacts')
+const nativePlugin = nativeGooglePlugin
 
 function fieldId(metadata: GoogleFieldMetadata | undefined, fallback: string): string {
   return metadata?.source?.id ?? fallback

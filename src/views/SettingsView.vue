@@ -3,6 +3,7 @@ import {
   Apple,
   ArrowLeft,
   CloudUpload,
+  DatabaseBackup,
   ContactRound,
   FileSpreadsheet,
   Languages,
@@ -13,6 +14,7 @@ import {
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import RestoreBackupDialog from '@/components/RestoreBackupDialog.vue'
 import { supportedLocales, useLocaleSetting } from '@/composables/useLocaleSetting'
 import { useKindyStore } from '@/stores/kindy'
 import { useSecurityStore } from '@/stores/security'
@@ -21,6 +23,13 @@ const router = useRouter()
 const security = useSecurityStore()
 const store = useKindyStore()
 const { locale, setLocale } = useLocaleSetting()
+const showRestore = ref(false)
+
+function formatBackupDate(value: number): string {
+  return new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(
+    value,
+  )
+}
 const savingLock = ref(false)
 const isDev = import.meta.env.DEV
 
@@ -87,6 +96,48 @@ async function toggleLock(): Promise<void> {
         <span>{{ $t('settings.lockDelay') }}</span>
       </div>
     </article>
+
+    <h2 class="section-title">{{ $t('backup.section') }}</h2>
+    <article class="card settings-card">
+      <div class="settings-card__icon"><DatabaseBackup :size="24" /></div>
+      <div class="settings-card__copy">
+        <h2>{{ $t('backup.title') }}</h2>
+        <p>{{ $t('backup.hint') }}</p>
+      </div>
+      <span />
+      <div class="settings-card__footer settings-card__footer--sync" role="status">
+        <CloudUpload :size="17" />
+        <span v-if="store.backupState === 'running'">{{ $t('backup.running') }}</span>
+        <span v-else-if="store.backupState === 'not-connected'">{{
+          $t('backup.notConnected')
+        }}</span>
+        <span v-else-if="store.backupState === 'failed'" class="form-error">{{
+          $t('backup.failed')
+        }}</span>
+        <span v-else-if="store.lastBackupAt">{{
+          $t('backup.lastBackup', { date: formatBackupDate(store.lastBackupAt) })
+        }}</span>
+        <span v-else>{{ $t('backup.never') }}</span>
+      </div>
+      <p class="settings-note">{{ $t('backup.privacy') }}</p>
+      <div class="settings-actions">
+        <button
+          class="button button--ghost"
+          :disabled="store.backupState === 'running' || !store.people.length"
+          @click="store.backupNow()"
+        >
+          {{ $t('backup.backupNow') }}
+        </button>
+        <button class="button button--ghost" @click="showRestore = true">
+          {{ $t('backup.restore') }}
+        </button>
+      </div>
+    </article>
+    <RestoreBackupDialog
+      :open="showRestore"
+      @close="showRestore = false"
+      @restored="showRestore = false"
+    />
 
     <h2 class="section-title">{{ $t('settings.sources') }}</h2>
     <article class="card settings-card settings-card--google">

@@ -141,9 +141,17 @@ export interface WidgetSnapshotWriter {
   writeSnapshot(data: Pick<KindyData, 'people' | 'events' | 'reminders'>): Promise<void>
 }
 
-export interface BackupGateway {
-  export(password: string): Promise<string>
-  restore(uri: string, password: string): Promise<void>
+/** A single Kindy backup in the user's own cloud storage (Google Drive app folder). */
+export interface CloudBackupGateway {
+  latest(): Promise<CloudBackupInfo | null>
+  upload(content: string): Promise<CloudBackupInfo>
+  download(id: string): Promise<string>
+}
+
+export interface CloudBackupInfo {
+  id: string
+  modifiedAt: number
+  sizeBytes: number
 }
 
 export interface PhotoStore {

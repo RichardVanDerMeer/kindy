@@ -1,3 +1,6 @@
+/** Version of the Kindy data shape; storage adapters migrate up to it. */
+export const KINDY_SCHEMA_VERSION = 5
+
 export type EntityId = string
 export type SourceKind = 'kindy' | 'google'
 

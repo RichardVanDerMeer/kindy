@@ -889,7 +889,7 @@ Resolve these during Phase 0 or before their dependent phase:
 - Whether the first beta requires biometric lock.
 - Whether Google contact groups become Kindy circles automatically or only as suggestions.
 - Whether merge undo is guaranteed or explicitly best effort.
-- Whether the MVP is strictly on-device or needs encrypted cloud backup before public release.
+- ~~Whether the MVP is strictly on-device or needs encrypted cloud backup before public release.~~ Decided: automatic backup to the user's Google Drive app folder, see [ADR 0002](docs/adr/0002-backup-to-google-drive.md).
 
 ## 19. Success criteria for the first beta
 

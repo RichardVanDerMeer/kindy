@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ChevronRight, Search } from '@lucide/vue'
+import { ChevronRight, CloudDownload, Search } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import AgendaCard from '@/components/AgendaCard.vue'
 import CircleCard from '@/components/CircleCard.vue'
 import PersonAvatar from '@/components/PersonAvatar.vue'
+import RestoreBackupDialog from '@/components/RestoreBackupDialog.vue'
 import ViewHeader from '@/components/ViewHeader.vue'
 import type { Person } from '@/domain/model'
 import { useKindyStore } from '@/stores/kindy'
@@ -16,6 +17,7 @@ const router = useRouter()
 const { t } = useI18n()
 const query = ref('')
 const results = ref<Person[]>([])
+const showRestore = ref(false)
 
 watch(query, async (value) => {
   results.value = value.trim() ? await store.search(value) : []
@@ -81,6 +83,22 @@ function subtitle(person: Person): string {
     </template>
 
     <template v-else>
+      <article v-if="!store.people.length" class="card welcome-card">
+        <h2>{{ $t('backup.welcomeTitle') }}</h2>
+        <p>{{ $t('backup.welcomeText') }}</p>
+        <button class="button button--primary settings-wide-button" @click="showRestore = true">
+          <CloudDownload :size="18" /> {{ $t('backup.restoreFromDrive') }}
+        </button>
+        <RouterLink class="section-link welcome-card__alt" to="/people">
+          {{ $t('backup.startFresh') }}
+        </RouterLink>
+      </article>
+      <RestoreBackupDialog
+        :open="showRestore"
+        connect
+        @close="showRestore = false"
+        @restored="showRestore = false"
+      />
       <section class="home-section">
         <header class="section-header">
           <h2 class="section-title">{{ $t('home.upcoming') }}</h2>

@@ -2642,3 +2642,71 @@ button.section-link {
 .settings-card__footer--sync .section-link {
   margin-left: auto;
 }
+
+/* Backup */
+
+.settings-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.settings-actions {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+}
+
+.backup-found {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.backup-found > span:last-child {
+  display: flex;
+  flex-direction: column;
+}
+
+.backup-found small {
+  color: var(--color-text-muted);
+}
+
+.backup-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-small);
+  background: #fff4d6;
+  color: #86620c;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.welcome-card {
+  margin-top: var(--space-5);
+  padding: var(--space-5);
+  text-align: center;
+}
+
+.welcome-card p {
+  color: var(--color-text-muted);
+}
+
+.welcome-card .button {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.welcome-card__alt {
+  justify-content: center;
+  margin-top: var(--space-2);
+}

@@ -186,6 +186,111 @@ class KindyGoogleContactsPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun findBackup(call: PluginCall) {
+        val token = requireToken(call) ?: return
+        val name = call.getString("name")
+        if (name == null || !name.matches(BACKUP_NAME_PATTERN)) {
+            call.reject("A valid backup name is required")
+            return
+        }
+        execute {
+            try {
+                val uri = Uri.parse("$DRIVE_API_URL/files").buildUpon()
+                    .appendQueryParameter("spaces", "appDataFolder")
+                    .appendQueryParameter("q", "name = '$name' and trashed = false")
+                    .appendQueryParameter("fields", "files(id,modifiedTime,size)")
+                    .appendQueryParameter("orderBy", "modifiedTime desc")
+                    .appendQueryParameter("pageSize", "1")
+                    .build()
+                val response = send("GET", uri.toString(), token, null)
+                if (response.status !in 200..299) {
+                    call.reject("Google Drive returned HTTP ${response.status}", response.status.toString())
+                    return@execute
+                }
+                val files = JSObject(response.body).getJSONArray("files")
+                call.resolve(
+                    JSObject().apply {
+                        if (files.length() > 0) put("file", files.getJSONObject(0))
+                    },
+                )
+            } catch (error: Exception) {
+                call.reject("Unable to read the Google Drive backup", error)
+            }
+        }
+    }
+
+    @PluginMethod
+    fun uploadBackup(call: PluginCall) {
+        val token = requireToken(call) ?: return
+        val name = call.getString("name")
+        val content = call.getString("content")
+        val fileId = call.getString("fileId")
+        if (name == null || !name.matches(BACKUP_NAME_PATTERN) || content == null) {
+            call.reject("A backup name and content are required")
+            return
+        }
+        if (fileId != null && !fileId.matches(DRIVE_ID_PATTERN)) {
+            call.reject("Invalid backup file id")
+            return
+        }
+        execute {
+            try {
+                val response = if (fileId == null) {
+                    // New file: multipart upload with metadata that places it in the app folder.
+                    val boundary = "kindy-${System.currentTimeMillis()}"
+                    val metadata = JSObject().apply {
+                        put("name", name)
+                        put("parents", org.json.JSONArray().put("appDataFolder"))
+                    }
+                    val body = buildString {
+                        append("--$boundary\r\n")
+                        append("Content-Type: application/json; charset=UTF-8\r\n\r\n")
+                        append(metadata.toString()).append("\r\n")
+                        append("--$boundary\r\n")
+                        append("Content-Type: application/json; charset=UTF-8\r\n\r\n")
+                        append(content).append("\r\n")
+                        append("--$boundary--")
+                    }
+                    val uri = "$DRIVE_UPLOAD_URL/files?uploadType=multipart&fields=id,modifiedTime,size"
+                    send("POST", uri, token, body, "multipart/related; boundary=$boundary")
+                } else {
+                    val uri = "$DRIVE_UPLOAD_URL/files/$fileId?uploadType=media&fields=id,modifiedTime,size"
+                    send("PATCH", uri, token, content)
+                }
+                if (response.status !in 200..299) {
+                    call.reject("Google Drive returned HTTP ${response.status}", response.status.toString())
+                    return@execute
+                }
+                call.resolve(JSObject(response.body))
+            } catch (error: Exception) {
+                call.reject("Unable to upload the Google Drive backup", error)
+            }
+        }
+    }
+
+    @PluginMethod
+    fun downloadBackup(call: PluginCall) {
+        val token = requireToken(call) ?: return
+        val fileId = call.getString("fileId")
+        if (fileId == null || !fileId.matches(DRIVE_ID_PATTERN)) {
+            call.reject("A valid backup file id is required")
+            return
+        }
+        execute {
+            try {
+                val response = send("GET", "$DRIVE_API_URL/files/$fileId?alt=media", token, null)
+                if (response.status !in 200..299) {
+                    call.reject("Google Drive returned HTTP ${response.status}", response.status.toString())
+                    return@execute
+                }
+                call.resolve(JSObject().apply { put("content", response.body) })
+            } catch (error: Exception) {
+                call.reject("Unable to download the Google Drive backup", error)
+            }
+        }
+    }
+
+    @PluginMethod
     fun revoke(call: PluginCall) {
         val selectedAccount = account
         if (selectedAccount == null) {
@@ -228,6 +333,7 @@ class KindyGoogleContactsPlugin : Plugin() {
 
     private fun requestedScopes(): List<Scope> = listOf(
         Scope(CONTACTS_SCOPE),
+        Scope(DRIVE_APPDATA_SCOPE),
         Scope("openid"),
         Scope("profile"),
         Scope("email"),
@@ -263,7 +369,13 @@ class KindyGoogleContactsPlugin : Plugin() {
      * HttpURLConnection has no PATCH, so PATCH is sent as POST with Google's
      * documented X-HTTP-Method-Override header.
      */
-    private fun send(method: String, url: String, token: String, body: String?): HttpResponse {
+    private fun send(
+        method: String,
+        url: String,
+        token: String,
+        body: String?,
+        contentType: String = "application/json; charset=utf-8",
+    ): HttpResponse {
         val connection = URL(url).openConnection() as HttpURLConnection
         return try {
             connection.requestMethod = if (method == "PATCH") "POST" else method
@@ -274,7 +386,7 @@ class KindyGoogleContactsPlugin : Plugin() {
             connection.setRequestProperty("Accept", "application/json")
             if (body != null) {
                 connection.doOutput = true
-                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                connection.setRequestProperty("Content-Type", contentType)
                 connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
             }
             val status = connection.responseCode
@@ -291,6 +403,11 @@ class KindyGoogleContactsPlugin : Plugin() {
 private const val AUTHORIZATION_REQUEST_CODE = 9412
 private const val CONTACTS_SCOPE = "https://www.googleapis.com/auth/contacts"
 private const val PEOPLE_API_URL = "https://people.googleapis.com/v1"
+private const val DRIVE_APPDATA_SCOPE = "https://www.googleapis.com/auth/drive.appdata"
+private const val DRIVE_API_URL = "https://www.googleapis.com/drive/v3"
+private const val DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3"
+private val BACKUP_NAME_PATTERN = Regex("^[a-z0-9-]+\\.json$")
+private val DRIVE_ID_PATTERN = Regex("^[A-Za-z0-9_-]+$")
 private const val WRITABLE_FIELDS = "names,birthdays,events,metadata"
 private val RESOURCE_NAME_PATTERN = Regex("^people/[A-Za-z0-9_-]+$")
 private const val PEOPLE_CONNECTIONS_URL = "https://people.googleapis.com/v1/people/me/connections"

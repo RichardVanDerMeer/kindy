@@ -1,11 +1,18 @@
 import { nextPartialDate } from '@/domain/dates'
 import { normalizeText } from '@/domain/duplicates'
-import type { ImportantEvent, KindyData, Person, Reminder, UpcomingItem } from '@/domain/model'
+import {
+  KINDY_SCHEMA_VERSION,
+  type ImportantEvent,
+  type KindyData,
+  type Person,
+  type Reminder,
+  type UpcomingItem,
+} from '@/domain/model'
 import type { KindyRepository } from '@/domain/ports'
 import { demoData } from '@/fixtures/demo'
 
 const STORAGE_KEY = 'kindy.local-data.v3'
-const SCHEMA_VERSION = 5
+const SCHEMA_VERSION = KINDY_SCHEMA_VERSION
 
 function emptyData(): KindyData {
   return {
