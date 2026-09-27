@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { agendaFilterFor, buildAgenda } from '@/domain/agenda'
+import { agendaFilterFor, buildAgenda, toggleAgendaFilter } from '@/domain/agenda'
 import { circleAvatarStack } from '@/domain/circles'
 import { createConnection, inferGender, siblingIds } from '@/domain/connections'
 import type { KindyData, Person, Relationship } from '@/domain/model'
@@ -195,5 +195,24 @@ describe('person timeline', () => {
     expect(timeline.dated.map((entry) => entry.kind)).toEqual(['died', 'married', 'born'])
     expect(timeline.dated[1]?.otherPersonIds).toEqual(['els'])
     expect(timeline.undated.map((entry) => entry.kind)).toEqual(['anniversary'])
+  })
+})
+
+describe('upcoming filters', () => {
+  it('narrows to one type from "all", adds more, and falls back to "all"', () => {
+    let selected = toggleAgendaFilter(new Set(), 'birthday')
+    expect([...selected]).toEqual(['birthday'])
+    selected = toggleAgendaFilter(selected, 'wedding')
+    expect([...selected]).toEqual(['birthday', 'wedding'])
+    selected = toggleAgendaFilter(toggleAgendaFilter(selected, 'birthday'), 'wedding')
+    expect(selected.size).toBe(0)
+  })
+
+  it('treats selecting every type as "all"', () => {
+    let selected = new Set<ReturnType<typeof agendaFilterFor>>()
+    for (const filter of ['birthday', 'wedding', 'memorial', 'reminder', 'other'] as const) {
+      selected = toggleAgendaFilter(selected, filter)
+    }
+    expect(selected.size).toBe(0)
   })
 })

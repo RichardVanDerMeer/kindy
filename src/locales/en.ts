@@ -144,6 +144,7 @@ export default {
     daysAgo: '{count} days ago',
     inDays: 'in {count} days',
     filters: {
+      all: 'All',
       birthday: 'Birthdays',
       wedding: 'Weddings',
       memorial: 'In memory',

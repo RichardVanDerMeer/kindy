@@ -6,13 +6,20 @@ import { useI18n } from 'vue-i18n'
 import AddAgendaItemDialog, { type AgendaDraft } from '@/components/AddAgendaItemDialog.vue'
 import AgendaCard from '@/components/AgendaCard.vue'
 import ViewHeader from '@/components/ViewHeader.vue'
-import { agendaFilterFor, agendaFilters, type AgendaFilter, type AgendaItem } from '@/domain/agenda'
+import {
+  agendaFilters,
+  matchesAgendaFilters,
+  toggleAgendaFilter,
+  type AgendaFilter,
+  type AgendaItem,
+} from '@/domain/agenda'
 import { useKindyStore } from '@/stores/kindy'
 
 const store = useKindyStore()
 const { t, locale } = useI18n()
 
-const active = ref<Set<AgendaFilter>>(new Set(agendaFilters))
+/** Empty means "all". */
+const selected = ref<Set<AgendaFilter>>(new Set())
 const showEarlier = ref(false)
 const showAdd = ref(false)
 
@@ -24,14 +31,11 @@ async function save(draft: AgendaDraft): Promise<void> {
 }
 
 function toggle(filter: AgendaFilter): void {
-  const next = new Set(active.value)
-  if (next.has(filter)) next.delete(filter)
-  else next.add(filter)
-  active.value = next
+  selected.value = toggleAgendaFilter(selected.value, filter)
 }
 
 const visible = computed(() =>
-  store.agenda.filter((item) => active.value.has(agendaFilterFor(item.kind))),
+  store.agenda.filter((item) => matchesAgendaFilters(item, selected.value)),
 )
 const earlier = computed(() => visible.value.filter((item) => item.daysFromToday < 0))
 
@@ -67,11 +71,20 @@ const groups = computed(() => {
 
     <div class="filter-row" role="group" :aria-label="$t('upcoming.title')">
       <button
+        class="chip chip--toggle"
+        :class="{ 'chip--active': selected.size === 0 }"
+        :aria-pressed="selected.size === 0"
+        @click="selected = new Set()"
+      >
+        {{ $t('upcoming.filters.all') }}
+      </button>
+      <span class="filter-divider" aria-hidden="true" />
+      <button
         v-for="filter in agendaFilters"
         :key="filter"
         class="chip chip--toggle"
-        :class="{ 'chip--active': active.has(filter) }"
-        :aria-pressed="active.has(filter)"
+        :class="{ 'chip--active': selected.has(filter) }"
+        :aria-pressed="selected.has(filter)"
         @click="toggle(filter)"
       >
         {{ $t(`upcoming.filters.${filter}`) }}

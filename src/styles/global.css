@@ -2527,3 +2527,10 @@ button.section-link {
 .detail-row > strong {
   grid-area: value;
 }
+
+.filter-divider {
+  width: 1px;
+  flex: 0 0 auto;
+  margin: 8px 2px;
+  background: var(--color-border);
+}

@@ -195,3 +195,25 @@ export function buildAgenda(
     (left, right) => left.daysFromToday - right.daysFromToday || left.id.localeCompare(right.id),
   )
 }
+
+/**
+ * Filter selection for the Upcoming view. An empty selection means "all".
+ * Picking a type while everything shows narrows to just that type; picking
+ * more types adds them; clearing the last one returns to "all".
+ */
+export function toggleAgendaFilter(
+  selected: ReadonlySet<AgendaFilter>,
+  filter: AgendaFilter,
+): Set<AgendaFilter> {
+  const next = new Set(selected)
+  if (next.has(filter)) next.delete(filter)
+  else next.add(filter)
+  return next.size === agendaFilters.length ? new Set() : next
+}
+
+export function matchesAgendaFilters(
+  item: AgendaItem,
+  selected: ReadonlySet<AgendaFilter>,
+): boolean {
+  return selected.size === 0 || selected.has(agendaFilterFor(item.kind))
+}

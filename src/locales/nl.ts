@@ -144,6 +144,7 @@ export default {
     daysAgo: '{count} dagen geleden',
     inDays: 'over {count} dagen',
     filters: {
+      all: 'Alles',
       birthday: 'Verjaardagen',
       wedding: 'Trouwdagen',
       memorial: 'Herdenking',
