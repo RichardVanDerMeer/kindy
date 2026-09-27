@@ -101,6 +101,8 @@ export interface ExternalContactSnapshot {
   givenName?: string
   familyName?: string
   photoUrl?: string
+  birthday?: ContactDate
+  events: ContactEvent[]
   contactPoints: Array<{
     providerFieldId: string
     kind: 'phone' | 'email' | 'address' | 'url'

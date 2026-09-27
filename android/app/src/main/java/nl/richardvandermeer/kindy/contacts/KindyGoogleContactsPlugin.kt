@@ -295,4 +295,4 @@ private const val WRITABLE_FIELDS = "names,birthdays,events,metadata"
 private val RESOURCE_NAME_PATTERN = Regex("^people/[A-Za-z0-9_-]+$")
 private const val PEOPLE_CONNECTIONS_URL = "https://people.googleapis.com/v1/people/me/connections"
 private const val PERSON_FIELDS =
-    "names,nicknames,emailAddresses,phoneNumbers,addresses,birthdays,organizations,photos,memberships,metadata,urls"
+    "names,nicknames,emailAddresses,phoneNumbers,addresses,birthdays,events,organizations,photos,memberships,metadata,urls"

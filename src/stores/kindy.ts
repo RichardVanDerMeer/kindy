@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 
 import { buildAgenda, calendarDay } from '@/domain/agenda'
 import { createConnection } from '@/domain/connections'
-import { enqueueSync } from '@/domain/contactSync'
+import { enqueueSync, importedContactDates, managedContactFields } from '@/domain/contactSync'
 import type { Circle, KindyData, PartialDate, Person, RelationshipRole } from '@/domain/model'
 import type { ExternalContactsConnection, ExternalContactSnapshot } from '@/domain/ports'
 import { getGoogleContactsGateway } from '@/infrastructure/contacts/googleContactsGateway'
@@ -23,6 +23,13 @@ function readWriteBack(): boolean {
 }
 
 export type ContactSyncStatus = 'local' | 'synced' | 'pending' | 'failed'
+
+/** Death events written in any language Kindy supports. */
+function deathLabels(): string[] {
+  return i18n.global.availableLocales.map((locale) =>
+    i18n.global.t('contactSync.deathEvent', {}, { locale }),
+  )
+}
 
 export const useKindyStore = defineStore('kindy', () => {
   const initialized = ref(false)
@@ -242,9 +249,19 @@ export const useKindyStore = defineStore('kindy', () => {
           identity.providerAccountId === connection.providerAccountId &&
           identity.providerResourceId === contact.resourceName,
       )
+      const dates = importedContactDates(contact.birthday, contact.events, deathLabels())
       if (existingIdentity) {
         existingIdentity.etag = contact.etag
         existingIdentity.lastSyncedAt = Date.now()
+        // Fill a missing birthday, but never overwrite one kept in Kindy.
+        const linked = next.people.find((person) => person.id === existingIdentity.personId)
+        if (linked && !linked.birthDate && dates.birthDate) {
+          linked.birthDate = dates.birthDate
+          existingIdentity.writtenFields = {
+            birthday: contact.birthday ?? null,
+            events: existingIdentity.writtenFields?.events ?? [],
+          }
+        }
         skipped += 1
         continue
       }
@@ -256,9 +273,11 @@ export const useKindyStore = defineStore('kindy', () => {
         displayName: contact.displayName,
         givenName: contact.givenName,
         familyName: contact.familyName,
+        birthDate: dates.birthDate,
+        deathDate: dates.deathDate,
         isFavorite: false,
         isArchived: false,
-        isDeceased: false,
+        isDeceased: Boolean(dates.deathDate),
         contactPoints: contact.contactPoints.map((point, index) => ({
           id: crypto.randomUUID(),
           kind: point.kind,
@@ -282,6 +301,25 @@ export const useKindyStore = defineStore('kindy', () => {
         etag: contact.etag,
         lastSyncedAt: now,
       })
+      for (const date of dates.anniversaries) {
+        next.events.push({
+          id: crypto.randomUUID(),
+          type: 'anniversary',
+          title: 'anniversary',
+          date,
+          personIds: [personId],
+          source: 'google',
+          externalSourceRef: contact.resourceName,
+        })
+      }
+      // The imported dates already live in Google: treat them as written, so a
+      // later change in Kindy replaces them instead of adding a second value.
+      const identity = next.externalIdentities.at(-1)
+      if (identity) {
+        identity.writtenFields = managedContactFields(personId, next, {
+          death: i18n.global.t('contactSync.deathEvent'),
+        })
+      }
       imported += 1
     }
 

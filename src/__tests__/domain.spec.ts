@@ -157,6 +157,26 @@ describe('Google Contacts mapping', () => {
     })
   })
 
+  it('takes the contact birthday and dated events, without inventing a year', () => {
+    const snapshot = mapGooglePerson({
+      resourceName: 'people/c9',
+      names: [{ displayName: 'Grace Hopper' }],
+      birthdays: [
+        { date: { year: 0, month: 12, day: 9 }, metadata: { primary: true } },
+        { date: { year: 1906, month: 12, day: 9 } },
+      ],
+      events: [
+        { type: 'anniversary', date: { year: 1930, month: 6, day: 15 } },
+        { type: 'other', date: { year: 2020 } },
+      ],
+    })
+
+    expect(snapshot?.birthday).toEqual({ month: 12, day: 9 })
+    expect(snapshot?.events).toEqual([
+      { type: 'anniversary', date: { year: 1930, month: 6, day: 15 } },
+    ])
+  })
+
   it('ignores Google resources without a usable name', () => {
     expect(mapGooglePerson({ resourceName: 'people/empty', names: [] })).toBeNull()
   })

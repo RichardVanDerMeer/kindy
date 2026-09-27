@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   enqueueSync,
+  importedContactDates,
   managedContactFields,
   planContactUpdate,
   type ContactUpdate,
@@ -292,6 +293,26 @@ describe('running the sync', () => {
       state: 'failed',
       attempts: 1,
       lastError: 'Google Contacts returned HTTP 503',
+    })
+  })
+})
+
+describe('importing dates from Google', () => {
+  it('reads birthday, anniversaries and a death event in any supported language', () => {
+    expect(
+      importedContactDates(
+        { month: 3, day: 1 },
+        [
+          { type: 'anniversary', date: { year: 1999, month: 5, day: 20 } },
+          { type: 'Passed away', date: { year: 2023, month: 8, day: 2 } },
+          { type: 'Naamdag', date: { month: 4, day: 11 } },
+        ],
+        ['Overleden', 'Passed away'],
+      ),
+    ).toEqual({
+      birthDate: { year: null, month: 3, day: 1 },
+      deathDate: { year: 2023, month: 8, day: 2 },
+      anniversaries: [{ year: 1999, month: 5, day: 20 }],
     })
   })
 })

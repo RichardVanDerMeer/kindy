@@ -70,6 +70,8 @@ interface GooglePerson {
   resourceName?: string
   etag?: string
   metadata?: { deleted?: boolean }
+  birthdays?: Array<{ date?: Partial<ContactDate>; metadata?: GoogleFieldMetadata }>
+  events?: Array<{ type?: string; date?: Partial<ContactDate> }>
   names?: Array<{
     displayName?: string
     givenName?: string
@@ -93,6 +95,23 @@ const nativePlugin = registerPlugin<GoogleContactsPlugin>('KindyGoogleContacts')
 
 function fieldId(metadata: GoogleFieldMetadata | undefined, fallback: string): string {
   return metadata?.source?.id ?? fallback
+}
+
+/** Google omits the year (or sends 0) for dates without one. */
+function googleDate(date: Partial<ContactDate> | undefined): ContactDate | undefined {
+  if (!date?.month || !date.day) return undefined
+  return date.year
+    ? { year: date.year, month: date.month, day: date.day }
+    : { month: date.month, day: date.day }
+}
+
+/** The contact's own birthday wins over one copied from a Google profile. */
+function googleBirthday(person: GooglePerson): ContactDate | undefined {
+  const birthdays = person.birthdays ?? []
+  const preferred =
+    birthdays.find((birthday) => birthday.metadata?.primary && googleDate(birthday.date)) ??
+    birthdays.find((birthday) => googleDate(birthday.date))
+  return googleDate(preferred?.date)
 }
 
 export function mapGooglePerson(person: GooglePerson): ExternalContactSnapshot | null {
@@ -141,6 +160,11 @@ export function mapGooglePerson(person: GooglePerson): ExternalContactSnapshot |
   return {
     resourceName,
     etag: person.etag ?? '',
+    birthday: googleBirthday(person),
+    events: (person.events ?? []).flatMap((event) => {
+      const date = googleDate(event.date)
+      return date ? [{ type: event.type ?? 'other', date }] : []
+    }),
     displayName: name.displayName,
     givenName: name.givenName,
     familyName: name.familyName,
@@ -243,6 +267,8 @@ const previewContacts: ExternalContactSnapshot[] = [
     displayName: 'Lotte de Jong',
     givenName: 'Lotte',
     familyName: 'de Jong',
+    birthday: { year: 1991, month: 11, day: 8 },
+    events: [],
     contactPoints: [
       {
         providerFieldId: 'preview-lotte-email',
@@ -258,6 +284,8 @@ const previewContacts: ExternalContactSnapshot[] = [
     displayName: 'Mohammed El Amrani',
     givenName: 'Mohammed',
     familyName: 'El Amrani',
+    birthday: { month: 10, day: 12 },
+    events: [{ type: 'anniversary', date: { year: 2018, month: 7, day: 21 } }],
     contactPoints: [
       {
         providerFieldId: 'preview-mohammed-phone',
@@ -273,6 +301,7 @@ const previewContacts: ExternalContactSnapshot[] = [
     displayName: 'Noor Smit',
     givenName: 'Noor',
     familyName: 'Smit',
+    events: [],
     contactPoints: [],
   },
 ]

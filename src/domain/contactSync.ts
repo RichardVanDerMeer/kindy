@@ -10,6 +10,37 @@ import type {
 /** Google's own type for anniversaries; wedding days are written with it. */
 export const ANNIVERSARY_EVENT_TYPE = 'anniversary'
 
+function fromContactDate(date: ContactDate): PartialDate {
+  return { year: date.year ?? null, month: date.month, day: date.day }
+}
+
+export interface ImportedDates {
+  birthDate?: PartialDate
+  deathDate?: PartialDate
+  anniversaries: PartialDate[]
+}
+
+/**
+ * Reads dates from a Google contact. Anniversaries stay anniversaries (Google
+ * does not say whether it is a wedding). A death event is recognised by the
+ * labels Kindy itself writes, in any supported language.
+ */
+export function importedContactDates(
+  birthday: ContactDate | undefined,
+  events: ContactEvent[],
+  deathLabels: string[],
+): ImportedDates {
+  const labels = deathLabels.map((label) => label.toLocaleLowerCase())
+  const death = events.find((event) => labels.includes(event.type.toLocaleLowerCase()))
+  return {
+    birthDate: birthday ? fromContactDate(birthday) : undefined,
+    deathDate: death ? fromContactDate(death.date) : undefined,
+    anniversaries: events
+      .filter((event) => event.type.toLocaleLowerCase() === ANNIVERSARY_EVENT_TYPE)
+      .map((event) => fromContactDate(event.date)),
+  }
+}
+
 function toContactDate(date: PartialDate): ContactDate {
   return date.year === null
     ? { month: date.month, day: date.day }
