@@ -1,7 +1,8 @@
 import { calendarDay } from './agenda'
 import type { EntityId, Interaction, KindyData, PartialDate } from './model'
 
-export type TimelineKind = 'born' | 'married' | 'anniversary' | 'died' | 'memo' | 'interaction'
+export type TimelineKind =
+  'born' | 'married' | 'anniversary' | 'died' | 'memo' | 'interaction' | 'appointment'
 
 export interface TimelineEntry {
   id: string
@@ -56,6 +57,16 @@ export function personTimeline(
       date: calendarDay(new Date(occurrence.snoozedUntil ?? occurrence.dueAt)),
       otherPersonIds: [],
       title: reminder.title,
+    })
+  }
+  for (const link of data.calendarLinks) {
+    if (link.status !== 'linked' || !link.personIds.includes(personId)) continue
+    entries.push({
+      id: link.id,
+      kind: 'appointment',
+      date: calendarDay(new Date(link.startsAt)),
+      otherPersonIds: link.personIds.filter((id) => id !== personId),
+      title: link.title,
     })
   }
   for (const interaction of data.interactions) {

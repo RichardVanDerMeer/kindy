@@ -1,5 +1,5 @@
 /** Version of the Kindy data shape; storage adapters migrate up to it. */
-export const KINDY_SCHEMA_VERSION = 5
+export const KINDY_SCHEMA_VERSION = 6
 
 export type EntityId = string
 export type SourceKind = 'kindy' | 'google'
@@ -43,6 +43,8 @@ export interface Person {
   deathDate?: PartialDate
   memorialNote?: string
   howWeMet?: string
+  /** Fields the user chose to keep only in Kindy; they are never written to Google. */
+  syncExclusions?: SyncField[]
   contactPoints: ContactPoint[]
   details: PersonDetail[]
   createdAt: number
@@ -75,9 +77,22 @@ export interface ContactEvent {
   date: ContactDate
 }
 
+/** Person fields that can be written to the linked address book. */
+export type SyncField = 'name' | 'phones' | 'emails' | 'birthday' | 'events' | 'photo'
+
+export interface ContactName {
+  givenName?: string
+  familyName?: string
+}
+
 export interface WrittenContactFields {
   birthday: ContactDate | null
   events: ContactEvent[]
+  name?: ContactName
+  phones?: string[]
+  emails?: string[]
+  /** Hash of the last photo Kindy uploaded; photos themselves are not kept twice. */
+  photoHash?: string
 }
 
 /**
@@ -230,6 +245,37 @@ export interface Interaction {
   summary?: string
 }
 
+export interface WishItem {
+  id: EntityId
+  personId: EntityId
+  title: string
+  url?: string
+  note?: string
+  status: 'idea' | 'bought' | 'given'
+  createdAt: number
+  updatedAt: number
+}
+
+/**
+ * A link between people and an appointment in the phone's calendar. The title
+ * and time are copied so Kindy can show the appointment without calendar access.
+ */
+export interface CalendarLink {
+  id: EntityId
+  eventId: string
+  calendarId?: string
+  title: string
+  startsAt: number
+  endsAt?: number
+  allDay: boolean
+  location?: string
+  personIds: EntityId[]
+  /** Ignored suggestions are remembered so they are not suggested again. */
+  status: 'linked' | 'ignored'
+  createdBy: 'kindy' | 'calendar'
+  createdAt: number
+}
+
 export interface KindyData {
   schemaVersion: number
   people: Person[]
@@ -243,6 +289,8 @@ export interface KindyData {
   reminderOccurrences: ReminderOccurrence[]
   interactions: Interaction[]
   syncQueue: SyncOperation[]
+  wishes: WishItem[]
+  calendarLinks: CalendarLink[]
 }
 
 export interface UpcomingItem {

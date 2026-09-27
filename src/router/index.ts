@@ -37,7 +37,8 @@ const router = createRouter({
       meta: { showNavigation: false },
     },
   ],
-  scrollBehavior: () => ({ top: 0 }),
+  // A hash such as #wishlist scrolls to that part of a profile.
+  scrollBehavior: (to) => (to.hash ? { el: to.hash, top: 16 } : { top: 0 }),
 })
 
 export default router

@@ -166,6 +166,29 @@ class KindyGoogleContactsPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun updateContactPhoto(call: PluginCall) {
+        val token = requireToken(call) ?: return
+        val resourceName = requireResourceName(call) ?: return
+        val photoBytes = call.getString("photoBytes")
+        if (photoBytes.isNullOrBlank()) {
+            call.reject("Photo bytes are required")
+            return
+        }
+        execute {
+            try {
+                val body = JSObject().apply {
+                    put("photoBytes", photoBytes)
+                    put("personFields", "photos,metadata")
+                }
+                val uri = "$PEOPLE_API_URL/$resourceName:updateContactPhoto"
+                resolveJson(call, send("PATCH", uri, token, body.toString()))
+            } catch (error: Exception) {
+                call.reject("Unable to update the Google contact photo", error)
+            }
+        }
+    }
+
+    @PluginMethod
     fun createContact(call: PluginCall) {
         val token = requireToken(call) ?: return
         val person = call.getObject("person")
@@ -408,7 +431,7 @@ private const val DRIVE_API_URL = "https://www.googleapis.com/drive/v3"
 private const val DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3"
 private val BACKUP_NAME_PATTERN = Regex("^[a-z0-9-]+\\.json$")
 private val DRIVE_ID_PATTERN = Regex("^[A-Za-z0-9_-]+$")
-private const val WRITABLE_FIELDS = "names,birthdays,events,metadata"
+private const val WRITABLE_FIELDS = "names,phoneNumbers,emailAddresses,birthdays,events,photos,metadata"
 private val RESOURCE_NAME_PATTERN = Regex("^people/[A-Za-z0-9_-]+$")
 private const val PEOPLE_CONNECTIONS_URL = "https://people.googleapis.com/v1/people/me/connections"
 private const val PERSON_FIELDS =

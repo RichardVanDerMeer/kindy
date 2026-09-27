@@ -23,7 +23,7 @@ function person(id: string, overrides: Partial<Person> = {}): Person {
 
 function data(overrides: Partial<KindyData>): KindyData {
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     people: [],
     externalIdentities: [],
     circles: [],
@@ -35,6 +35,8 @@ function data(overrides: Partial<KindyData>): KindyData {
     reminderOccurrences: [],
     interactions: [],
     syncQueue: [],
+    wishes: [],
+    calendarLinks: [],
     ...overrides,
   }
 }
@@ -211,7 +213,14 @@ describe('upcoming filters', () => {
 
   it('treats selecting every type as "all"', () => {
     let selected = new Set<ReturnType<typeof agendaFilterFor>>()
-    for (const filter of ['birthday', 'wedding', 'memorial', 'reminder', 'other'] as const) {
+    for (const filter of [
+      'birthday',
+      'wedding',
+      'memorial',
+      'appointment',
+      'reminder',
+      'other',
+    ] as const) {
       selected = toggleAgendaFilter(selected, filter)
     }
     expect(selected.size).toBe(0)

@@ -12,6 +12,8 @@ import {
   Mail,
   MessageCircle,
   NotebookPen,
+  CloudOff,
+  Pencil,
   Phone,
   Plus,
   Sparkles,
@@ -26,13 +28,16 @@ import { useI18n } from 'vue-i18n'
 import AddConnectionDialog, { type NewPersonInput } from '@/components/AddConnectionDialog.vue'
 import AddNoteDialog from '@/components/AddNoteDialog.vue'
 import CirclePickerDialog from '@/components/CirclePickerDialog.vue'
+import AppointmentsCard from '@/components/AppointmentsCard.vue'
 import ContactSyncBadge from '@/components/ContactSyncBadge.vue'
+import EditPersonDialog from '@/components/EditPersonDialog.vue'
+import WishlistCard from '@/components/WishlistCard.vue'
 import PersonAvatar from '@/components/PersonAvatar.vue'
 import RelationshipDiagram from '@/components/RelationshipDiagram.vue'
 import { calendarDay } from '@/domain/agenda'
 import { inferGender, relationshipViewFor, siblingIds } from '@/domain/connections'
 import { ageBetween, formatPartialDate } from '@/domain/dates'
-import type { PartialDate, Person, RelationshipRole } from '@/domain/model'
+import type { PartialDate, Person, RelationshipRole, SyncField } from '@/domain/model'
 import { connectedPersonId } from '@/domain/relationships'
 import { personTimeline, type TimelineEntry } from '@/domain/timeline'
 import { useKindyStore } from '@/stores/kindy'
@@ -47,6 +52,12 @@ const activeTab = ref<Tab>('overview')
 const showCirclePicker = ref(false)
 const showAddConnection = ref(false)
 const showAddNote = ref(false)
+const showEdit = ref(false)
+
+/** For linked people: fields the user chose to keep in Kindy only. */
+function localOnly(field: SyncField): boolean {
+  return Boolean(person.value?.syncExclusions?.includes(field)) && store.linkedToGoogle(props.id)
+}
 const connectionError = ref<string>()
 
 watch(
@@ -255,15 +266,20 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
       <button class="icon-button" :aria-label="$t('common.back')" @click="router.back()">
         <ArrowLeft :size="24" />
       </button>
+      <button class="icon-button" :aria-label="$t('profile.edit')" @click="showEdit = true">
+        <Pencil :size="21" />
+      </button>
     </header>
 
     <div class="profile-hero">
-      <PersonAvatar
-        :name="person.displayName"
-        :photo-ref="person.photoRef"
-        :deceased="person.isDeceased"
-        size="large"
-      />
+      <button class="avatar-button" :aria-label="$t('edit.photo')" @click="showEdit = true">
+        <PersonAvatar
+          :name="person.displayName"
+          :photo-ref="person.photoRef"
+          :deceased="person.isDeceased"
+          size="large"
+        />
+      </button>
       <div class="profile-hero__copy">
         <div class="profile-name-row">
           <h1>{{ person.displayName }}</h1>
@@ -362,7 +378,10 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
 
         <div v-if="person.birthDate && !person.isDeceased" class="detail-row">
           <Cake :size="20" />
-          <span>{{ $t('profile.birthDate') }}</span>
+          <span
+            >{{ $t('profile.birthDate') }}
+            <CloudOff v-if="localOnly('birthday')" :size="13" :aria-label="$t('edit.localOnly')"
+          /></span>
           <strong>
             {{ formatDate(person.birthDate) }}
             <small v-if="age !== null" class="detail-meta">{{
@@ -400,7 +419,10 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
 
         <div v-for="point in phones" :key="point.id" class="detail-row detail-row--contact">
           <Phone :size="20" />
-          <span>{{ point.label }}</span>
+          <span
+            >{{ point.label }}
+            <CloudOff v-if="localOnly('phones')" :size="13" :aria-label="$t('edit.localOnly')"
+          /></span>
           <strong class="detail-with-actions">
             <a :href="`tel:${point.value}`">{{ point.value }}</a>
             <span v-if="!person.isDeceased" class="detail-actions">
@@ -426,7 +448,10 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
 
         <div v-for="point in emails" :key="point.id" class="detail-row detail-row--contact">
           <Mail :size="20" />
-          <span>{{ point.label }}</span>
+          <span
+            >{{ point.label }}
+            <CloudOff v-if="localOnly('emails')" :size="13" :aria-label="$t('edit.localOnly')"
+          /></span>
           <strong class="detail-with-actions">
             <a :href="`mailto:${point.value}`">{{ point.value }}</a>
           </strong>
@@ -446,6 +471,8 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
         </div>
       </article>
 
+      <WishlistCard v-if="!person.isDeceased" :person-id="person.id" />
+
       <article class="card note-card note-card--preview">
         <div class="card-heading-row">
           <h2>{{ notes[0] ? $t('profile.latestNote') : $t('profile.notes') }}</h2>
@@ -463,6 +490,8 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
           <ChevronRight :size="16" />
         </button>
       </article>
+
+      <AppointmentsCard v-if="!person.isDeceased" :person-id="person.id" />
 
       <article class="card profile-card">
         <h2>{{ $t('profile.closeConnections') }}</h2>
@@ -610,6 +639,12 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
       :error="connectionError"
       @close="showAddConnection = false"
       @save="addConnection"
+    />
+    <EditPersonDialog
+      :open="showEdit"
+      :person="person"
+      @close="showEdit = false"
+      @saved="showEdit = false"
     />
     <AddNoteDialog
       :open="showAddNote"

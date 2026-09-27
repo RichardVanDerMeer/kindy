@@ -30,7 +30,7 @@ function person(id: string, overrides: Partial<Person> = {}): Person {
 
 function data(overrides: Partial<KindyData>): KindyData {
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     people: [],
     externalIdentities: [],
     circles: [],
@@ -42,6 +42,8 @@ function data(overrides: Partial<KindyData>): KindyData {
     reminderOccurrences: [],
     interactions: [],
     syncQueue: [],
+    wishes: [],
+    calendarLinks: [],
     ...overrides,
   }
 }
@@ -73,7 +75,7 @@ describe('managed contact fields', () => {
       }),
       labels,
     )
-    expect(fields).toEqual({
+    expect(fields).toMatchObject({
       birthday: { month: 2, day: 3 },
       events: [
         { type: 'anniversary', date: { year: 1975, month: 6, day: 12 } },
@@ -110,6 +112,35 @@ describe('planning a contact update', () => {
       updatePersonFields: ['birthdays'],
       birthdays: [{ year: 1990, month: 10, day: 3 }],
     })
+  })
+
+  it('keeps numbers added in Google and their labels, and removes numbers Kindy removed', () => {
+    const plan = planContactUpdate(
+      {
+        birthdays: [],
+        events: [],
+        phones: [
+          { value: '+31 6 1111 1111', type: 'mobile' },
+          { value: '+31 20 222 2222', type: 'work' },
+        ],
+      },
+      { birthday: null, events: [], phones: ['+31611111111', '+31 20 222 2222'] },
+      { birthday: null, events: [], phones: ['+31611111111', '+31 6 3333 3333'] },
+    )
+    expect(plan).toEqual({
+      updatePersonFields: ['phoneNumbers'],
+      phoneNumbers: [{ value: '+31 6 1111 1111', type: 'mobile' }, { value: '+31 6 3333 3333' }],
+    })
+  })
+
+  it('leaves fields that are kept in Kindy only untouched', () => {
+    const plan = planContactUpdate(
+      { birthdays: [], events: [], name: { givenName: 'Robin' } },
+      undefined,
+      { birthday: { month: 1, day: 1 }, events: [], name: { givenName: 'Rob' } },
+      ['name', 'birthday'],
+    )
+    expect(plan).toBeNull()
   })
 
   it('does nothing when Google already matches', () => {
@@ -171,6 +202,11 @@ class FakeGoogle implements ExternalContactsGateway {
     this.created.push(input)
     return { resourceName: 'people/new', etag: 'e1' }
   }
+  photos: string[] = []
+  async updateContactPhoto(_resourceName: string, photo: string) {
+    this.photos.push(photo)
+    return { etag: 'e2' }
+  }
   async revoke() {}
 }
 
@@ -200,6 +236,12 @@ const identity: ExternalIdentity = {
 describe('running the sync', () => {
   it('writes a changed birthday and records what was written', async () => {
     const google = new FakeGoogle()
+    google.contacts.set('people/robin', {
+      etag: 'e0',
+      birthdays: [],
+      events: [],
+      name: { givenName: 'robin' },
+    })
     const repository = memoryRepository(
       data({
         people: [person('robin', { birthDate: { year: 1985, month: 10, day: 2 } })],
@@ -227,6 +269,45 @@ describe('running the sync', () => {
       lastSyncedAt: 5,
       writtenFields: { birthday: { year: 1985, month: 10, day: 2 }, events: [] },
     })
+  })
+
+  it('uploads a photo chosen in Kindy once, and skips fields kept in Kindy only', async () => {
+    const google = new FakeGoogle()
+    google.contacts.set('people/robin', {
+      etag: 'e0',
+      birthdays: [],
+      events: [],
+      name: { givenName: 'Robin' },
+    })
+    const repository = memoryRepository(
+      data({
+        people: [
+          person('robin', {
+            givenName: 'Rob',
+            photoRef: 'data:image/jpeg;base64,AAAA',
+            syncExclusions: ['name'],
+          }),
+        ],
+        externalIdentities: [identity],
+        syncQueue: [
+          {
+            id: 'op',
+            personId: 'robin',
+            kind: 'update',
+            state: 'pending',
+            attempts: 0,
+            updatedAt: 1,
+          },
+        ],
+      }),
+    )
+
+    await runContactSync({ repository, gateway: google, labels })
+
+    expect(google.updates).toEqual([])
+    expect(google.photos).toEqual(['data:image/jpeg;base64,AAAA'])
+    expect(repository.current.externalIdentities[0]?.writtenFields?.name).toBeUndefined()
+    expect(repository.current.externalIdentities[0]?.writtenFields?.photoHash).toBeTruthy()
   })
 
   it('creates a Google contact for a new person and links it', async () => {

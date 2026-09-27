@@ -5,6 +5,7 @@ import com.getcapacitor.BridgeActivity;
 import android.os.Bundle;
 import android.view.WindowManager;
 
+import nl.richardvandermeer.kindy.calendar.KindyCalendarPlugin;
 import nl.richardvandermeer.kindy.security.KindySecurityPlugin;
 import nl.richardvandermeer.kindy.widgets.KindyWidgetPlugin;
 import nl.richardvandermeer.kindy.contacts.KindyGoogleContactsPlugin;
@@ -19,6 +20,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(KindySecurityPlugin.class);
         registerPlugin(KindyWidgetPlugin.class);
         registerPlugin(KindyGoogleContactsPlugin.class);
+        registerPlugin(KindyCalendarPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

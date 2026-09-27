@@ -28,6 +28,8 @@ const collections = [
   'reminderOccurrences',
   'interactions',
   'syncQueue',
+  'wishes',
+  'calendarLinks',
 ] as const satisfies ReadonlyArray<keyof KindyData>
 
 export function createBackup(data: KindyData, createdAt: number): string {

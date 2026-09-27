@@ -2,6 +2,7 @@
 import {
   Apple,
   ArrowLeft,
+  CalendarDays,
   CloudUpload,
   DatabaseBackup,
   ContactRound,
@@ -11,7 +12,7 @@ import {
   RotateCcw,
   ShieldCheck,
 } from '@lucide/vue'
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import RestoreBackupDialog from '@/components/RestoreBackupDialog.vue'
@@ -24,6 +25,12 @@ const security = useSecurityStore()
 const store = useKindyStore()
 const { locale, setLocale } = useLocaleSetting()
 const showRestore = ref(false)
+
+onMounted(() => void store.refreshCalendar())
+
+function chooseCalendar(event: Event): void {
+  store.setDefaultCalendar((event.target as HTMLSelectElement).value)
+}
 
 function formatBackupDate(value: number): string {
   return new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(
@@ -138,6 +145,42 @@ async function toggleLock(): Promise<void> {
       @close="showRestore = false"
       @restored="showRestore = false"
     />
+
+    <h2 class="section-title">{{ $t('calendar.settingsTitle') }}</h2>
+    <article class="card settings-card">
+      <div class="settings-card__icon"><CalendarDays :size="24" /></div>
+      <div class="settings-card__copy">
+        <h2>{{ $t('calendar.settingsTitle') }}</h2>
+        <p>{{ $t('calendar.settingsHint') }}</p>
+      </div>
+      <span />
+      <p v-if="store.calendarPermission === 'granted'" class="settings-note settings-note--ok">
+        {{ $t('calendar.connected') }}
+      </p>
+      <p v-else-if="store.calendarPermission === 'denied'" class="settings-note form-error">
+        {{ $t('calendar.denied') }}
+      </p>
+      <button
+        v-else
+        class="button button--ghost settings-wide-button"
+        @click="store.connectCalendar()"
+      >
+        {{ $t('calendar.connect') }}
+      </button>
+      <label v-if="store.calendars.length" class="field settings-wide-button">
+        <span>{{ $t('calendar.defaultCalendar') }}</span>
+        <select
+          :value="
+            store.defaultCalendarId ?? store.calendars.find((calendar) => calendar.isPrimary)?.id
+          "
+          @change="chooseCalendar"
+        >
+          <option v-for="calendar in store.calendars" :key="calendar.id" :value="calendar.id">
+            {{ calendar.name }}{{ calendar.accountName ? ` · ${calendar.accountName}` : '' }}
+          </option>
+        </select>
+      </label>
+    </article>
 
     <h2 class="section-title">{{ $t('settings.sources') }}</h2>
     <article class="card settings-card settings-card--google">

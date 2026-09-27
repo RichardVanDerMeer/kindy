@@ -28,6 +28,8 @@ function emptyData(): KindyData {
     reminderOccurrences: [],
     interactions: [],
     syncQueue: [],
+    wishes: [],
+    calendarLinks: [],
   }
 }
 
@@ -49,6 +51,8 @@ export class BrowserKindyRepository implements KindyRepository {
       } else if (this.data.schemaVersion < SCHEMA_VERSION) {
         for (const circle of this.data.circles) circle.isFavorite ??= false
         this.data.syncQueue ??= []
+        this.data.wishes ??= []
+        this.data.calendarLinks ??= []
         this.data.schemaVersion = SCHEMA_VERSION
       }
       await this.persist()

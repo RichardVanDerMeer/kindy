@@ -1,4 +1,12 @@
-import type { ContactPoint, KindyData, PartialDate, Person, Relationship } from '@/domain/model'
+import {
+  KINDY_SCHEMA_VERSION,
+  type ContactPoint,
+  type KindyData,
+  type PartialDate,
+  type Person,
+  type Relationship,
+  type WishItem,
+} from '@/domain/model'
 
 const now = Date.now()
 const DAY = 86_400_000
@@ -50,6 +58,16 @@ function person(id: string, displayName: string, options: Partial<Person> = {}):
   }
 }
 
+function wish(
+  id: string,
+  personId: string,
+  title: string,
+  status: WishItem['status'],
+  note?: string,
+): WishItem {
+  return { id, personId, title, status, note, createdAt: now - DAY, updatedAt: now - DAY }
+}
+
 function avatar(name: string): string {
   return `${import.meta.env.BASE_URL}demo-avatars/${name}.svg`
 }
@@ -66,7 +84,7 @@ function connection(
 }
 
 export const demoData: KindyData = {
-  schemaVersion: 5,
+  schemaVersion: KINDY_SCHEMA_VERSION,
   people: [
     person('demo-richard', 'Richard van der Meer', {
       isSelf: true,
@@ -173,7 +191,7 @@ export const demoData: KindyData = {
       name: 'Familie',
       colorToken: 'family',
       iconKey: 'home',
-      backgroundImageRef: `${import.meta.env.BASE_URL}demo-backgrounds/family.svg`,
+      backgroundImageRef: `${import.meta.env.BASE_URL}circle-backgrounds/family.svg`,
       isFavorite: true,
       isArchived: false,
     },
@@ -191,7 +209,7 @@ export const demoData: KindyData = {
       description: 'Zaterdag 3 · VV De Zwaluwen',
       colorToken: 'team',
       iconKey: 'trophy',
-      backgroundImageRef: `${import.meta.env.BASE_URL}demo-backgrounds/football.svg`,
+      backgroundImageRef: `${import.meta.env.BASE_URL}circle-backgrounds/football.svg`,
       isFavorite: true,
       isArchived: false,
     },
@@ -329,4 +347,11 @@ export const demoData: KindyData = {
   ],
   interactions: [],
   syncQueue: [],
+  wishes: [
+    wish('wish-emma-drawing', 'demo-emma', 'Tekenset met aquarelpotloden', 'idea'),
+    wish('wish-emma-horses', 'demo-emma', 'Boek over paarden', 'bought', 'Ligt al in de kast'),
+    wish('wish-robin-bottle', 'demo-robin', 'Fietsbidon met isolatie', 'idea'),
+    wish('wish-sophie-concert', 'demo-sophie', 'Kaartjes voor een concert', 'idea'),
+  ],
+  calendarLinks: [],
 }

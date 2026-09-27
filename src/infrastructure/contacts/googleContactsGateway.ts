@@ -24,6 +24,10 @@ interface GoogleContactsPlugin {
     person: GoogleWritablePerson
   }): Promise<GoogleWritablePerson>
   createContact(options: { person: GoogleWritablePerson }): Promise<GoogleWritablePerson>
+  updateContactPhoto(options: {
+    resourceName: string
+    photoBytes: string
+  }): Promise<GoogleWritablePerson>
   findBackup(options: { name: string }): Promise<{ file?: GoogleDriveFile }>
   uploadBackup(options: {
     name: string
@@ -44,11 +48,16 @@ export interface GoogleDriveFile {
 interface GoogleWritablePerson {
   resourceName?: string
   etag?: string
-  names?: Array<{ givenName?: string; familyName?: string }>
+  names?: Array<{ givenName?: string; familyName?: string; metadata?: GoogleFieldMetadata }>
   birthdays?: Array<{ date?: ContactDate }>
   events?: Array<{ type?: string; date?: ContactDate }>
-  phoneNumbers?: Array<{ value: string }>
-  emailAddresses?: Array<{ value: string }>
+  phoneNumbers?: Array<{ value: string; type?: string }>
+  emailAddresses?: Array<{ value: string; type?: string }>
+  photos?: Array<{ url?: string; default?: boolean }>
+}
+
+function photoBytes(dataUrl: string): string {
+  return dataUrl.slice(dataUrl.indexOf(',') + 1)
 }
 
 function remoteFields(person: GoogleWritablePerson): RemoteContactFields {
@@ -59,6 +68,14 @@ function remoteFields(person: GoogleWritablePerson): RemoteContactFields {
     events: (person.events ?? [])
       .filter((event): event is ContactEvent => Boolean(event.date?.month && event.date.day))
       .map((event) => ({ type: event.type ?? 'other', date: event.date })),
+    name: (() => {
+      const name =
+        person.names?.find((candidate) => candidate.metadata?.primary) ?? person.names?.[0]
+      return name ? { givenName: name.givenName, familyName: name.familyName } : undefined
+    })(),
+    phones: (person.phoneNumbers ?? []).map(({ value, type }) => ({ value, type })),
+    emails: (person.emailAddresses ?? []).map(({ value, type }) => ({ value, type })),
+    photoUrl: person.photos?.find((photo) => !photo.default)?.url,
   }
 }
 
@@ -218,6 +235,9 @@ class NativeGoogleContactsGateway implements ExternalContactsGateway {
 
   async updateContactFields(resourceName: string, etag: string, update: ContactUpdate) {
     const person: GoogleWritablePerson = { etag }
+    if (update.names) person.names = update.names
+    if (update.phoneNumbers) person.phoneNumbers = update.phoneNumbers
+    if (update.emailAddresses) person.emailAddresses = update.emailAddresses
     if (update.birthdays) person.birthdays = update.birthdays.map((date) => ({ date }))
     if (update.events) person.events = update.events
     const result = await nativePlugin.updateContact({
@@ -232,6 +252,14 @@ class NativeGoogleContactsGateway implements ExternalContactsGateway {
     const result = await nativePlugin.createContact({ person: writablePerson(input) })
     if (!result.resourceName) throw new Error('Google did not return the new contact')
     return { resourceName: result.resourceName, etag: result.etag ?? '' }
+  }
+
+  async updateContactPhoto(resourceName: string, photo: string) {
+    const result = await nativePlugin.updateContactPhoto({
+      resourceName,
+      photoBytes: photoBytes(photo),
+    })
+    return { etag: result.etag ?? '' }
   }
 
   async listCandidates(pageToken?: string): Promise<ExternalContactsPage> {
@@ -384,8 +412,22 @@ class PreviewGoogleContactsGateway implements ExternalContactsGateway {
     const store = readPreviewStore()
     const person = store[resourceName] ?? {}
     if ((person.etag ?? 'preview-0') !== etag) throw new Error('The contact changed in Google')
+    if (update.names) person.names = update.names
+    if (update.phoneNumbers) person.phoneNumbers = update.phoneNumbers
+    if (update.emailAddresses) person.emailAddresses = update.emailAddresses
     if (update.birthdays) person.birthdays = update.birthdays.map((date) => ({ date }))
     if (update.events) person.events = update.events
+    person.etag = `preview-${Date.now()}`
+    store[resourceName] = person
+    writePreviewStore(store)
+    return { etag: person.etag }
+  }
+
+  async updateContactPhoto(resourceName: string, photo: string) {
+    await previewDelay()
+    const store = readPreviewStore()
+    const person = store[resourceName] ?? {}
+    person.photos = [{ url: photo }]
     person.etag = `preview-${Date.now()}`
     store[resourceName] = person
     writePreviewStore(store)

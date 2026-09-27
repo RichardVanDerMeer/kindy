@@ -3,21 +3,28 @@ import { defineStore } from 'pinia'
 
 import { buildAgenda, calendarDay } from '@/domain/agenda'
 import { createBackup, isWorthBackingUp, readBackup } from '@/domain/backup'
+import { sameOccurrence, suggestCalendarLinks, type DeviceCalendarEvent } from '@/domain/calendar'
 import { createConnection } from '@/domain/connections'
 import { enqueueSync, importedContactDates, managedContactFields } from '@/domain/contactSync'
 import {
   KINDY_SCHEMA_VERSION,
   type Circle,
+  type ContactPoint,
   type KindyData,
   type PartialDate,
   type Person,
   type RelationshipRole,
+  type SyncField,
+  type WishItem,
 } from '@/domain/model'
 import type {
+  CalendarPermission,
   CloudBackupInfo,
+  DeviceCalendar,
   ExternalContactsConnection,
   ExternalContactSnapshot,
 } from '@/domain/ports'
+import { getDeviceCalendarGateway } from '@/infrastructure/calendar/deviceCalendarGateway'
 import {
   getCloudBackupGateway,
   NotConnectedError,
@@ -44,6 +51,39 @@ function readLastBackup(): number | null {
 }
 
 export type BackupState = 'idle' | 'running' | 'failed' | 'not-connected'
+
+const DEFAULT_CALENDAR_KEY = 'kindy.calendar.default'
+
+export interface PersonEdit {
+  givenName: string
+  familyName?: string
+  nickname?: string
+  birthDate?: PartialDate
+  phones: string[]
+  emails: string[]
+  photoRef?: string
+}
+
+export interface NewAppointment {
+  title: string
+  startsAt: number
+  endsAt: number
+  allDay: boolean
+  location?: string
+  personIds: string[]
+}
+
+function sameList(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
+function points(person: Person, kind: 'phone' | 'email'): string[] {
+  return person.contactPoints.filter((point) => point.kind === kind).map((point) => point.value)
+}
+
+function samePartialDate(left?: PartialDate, right?: PartialDate): boolean {
+  return left?.year === right?.year && left?.month === right?.month && left?.day === right?.day
+}
 
 function readWriteBack(): boolean {
   try {
@@ -73,6 +113,10 @@ export const useKindyStore = defineStore('kindy', () => {
   const lastBackupAt = ref(readLastBackup())
   const backupState = ref<BackupState>('idle')
   let backupTimer: ReturnType<typeof setTimeout> | undefined
+  const calendarPermission = ref<CalendarPermission>('prompt')
+  const calendarEvents = ref<DeviceCalendarEvent[]>([])
+  const calendars = ref<DeviceCalendar[]>([])
+  const defaultCalendarId = ref(readDefaultCalendar())
 
   const people = computed(() =>
     (data.value?.people ?? [])
@@ -92,6 +136,12 @@ export const useKindyStore = defineStore('kindy', () => {
     (data.value?.externalIdentities ?? []).some((identity) => identity.provider === 'google'),
   )
   const pendingSyncCount = computed(() => data.value?.syncQueue.length ?? 0)
+  /** Appointments in the phone's calendar that look related to someone in Kindy. */
+  const calendarSuggestions = computed(() =>
+    data.value
+      ? suggestCalendarLinks(calendarEvents.value, people.value, data.value.calendarLinks)
+      : [],
+  )
   /** Everything from a week ago until a year ahead; views narrow it further. */
   const agenda = computed(() =>
     data.value ? buildAgenda(data.value, today.value, { daysBack: 7, daysAhead: 365 }) : [],
@@ -107,6 +157,7 @@ export const useKindyStore = defineStore('kindy', () => {
       initialized.value = true
       window.addEventListener('online', () => void syncGoogle())
       void syncGoogle()
+      void refreshCalendar()
       // At least one backup a day while Kindy is used.
       if (!lastBackupAt.value || Date.now() - lastBackupAt.value > DAY) scheduleBackup(5_000)
     } catch (caught) {
@@ -580,6 +631,265 @@ export const useKindyStore = defineStore('kindy', () => {
     void syncGoogle()
   }
 
+  function linkedToGoogle(personId: string): boolean {
+    return data.value ? isLinked(data.value, personId) : false
+  }
+
+  /**
+   * Saves edits to a person. For a linked contact the changed fields go to
+   * Google, unless the user chose "keep in Kindy only" for this change; those
+   * fields are then excluded from syncing until they are saved with sync on.
+   */
+  async function updatePerson(
+    personId: string,
+    edit: PersonEdit,
+    options: { syncToGoogle: boolean },
+  ): Promise<void> {
+    await mutate((draft) => {
+      const person = draft.people.find((candidate) => candidate.id === personId)
+      if (!person) return
+      const givenName = edit.givenName.trim()
+      const familyName = edit.familyName?.trim() || undefined
+      const phones = edit.phones.map((value) => value.trim()).filter(Boolean)
+      const emails = edit.emails.map((value) => value.trim()).filter(Boolean)
+
+      const changed: SyncField[] = []
+      if (givenName !== (person.givenName ?? '') || familyName !== person.familyName) {
+        changed.push('name')
+      }
+      if (!sameList(phones, points(person, 'phone'))) changed.push('phones')
+      if (!sameList(emails, points(person, 'email'))) changed.push('emails')
+      if (!samePartialDate(edit.birthDate, person.birthDate)) changed.push('birthday')
+      if (edit.photoRef !== person.photoRef) changed.push('photo')
+
+      person.givenName = givenName
+      person.familyName = familyName
+      person.displayName = [givenName, familyName].filter(Boolean).join(' ')
+      person.nickname = edit.nickname?.trim() || undefined
+      person.birthDate = edit.birthDate ? { ...edit.birthDate } : undefined
+      person.photoRef = edit.photoRef
+      person.contactPoints = [
+        ...updatedPoints(person, 'phone', phones),
+        ...updatedPoints(person, 'email', emails),
+        ...person.contactPoints.filter((point) => point.kind !== 'phone' && point.kind !== 'email'),
+      ]
+      person.updatedAt = Date.now()
+
+      if (!changed.length || !isLinked(draft, personId)) return
+      const exclusions = new Set(person.syncExclusions ?? [])
+      for (const field of changed) {
+        if (options.syncToGoogle) exclusions.delete(field)
+        else exclusions.add(field)
+      }
+      person.syncExclusions = exclusions.size ? [...exclusions] : undefined
+      if (options.syncToGoogle) queueContactUpdates(draft, [personId])
+    })
+    void syncGoogle()
+  }
+
+  /** Keeps ids and labels of numbers that stayed, so Google keeps its labels too. */
+  function updatedPoints(
+    person: Person,
+    kind: 'phone' | 'email',
+    values: string[],
+  ): ContactPoint[] {
+    const existing = person.contactPoints.filter((point) => point.kind === kind)
+    return values.map((value, index) => {
+      const match = existing.find((point) => point.value === value)
+      return (
+        match ?? {
+          id: crypto.randomUUID(),
+          kind,
+          label: kind === 'phone' ? 'mobile' : 'home',
+          value,
+          normalizedValue:
+            kind === 'phone' ? value.replace(/[^\d+]/g, '') : value.toLocaleLowerCase(),
+          isPrimary: index === 0,
+          source: 'kindy' as const,
+        }
+      )
+    })
+  }
+
+  /** The contact photo in Google, if the person is linked and has one. */
+  async function googlePhoto(personId: string): Promise<string | undefined> {
+    const identity = data.value?.externalIdentities.find(
+      (candidate) => candidate.personId === personId && candidate.provider === 'google',
+    )
+    if (!identity) return undefined
+    const gateway = getGoogleContactsGateway()
+    if (!(await gateway.restore())) return undefined
+    return (await gateway.getContactFields(identity.providerResourceId)).photoUrl
+  }
+
+  async function saveWish(
+    input: Omit<WishItem, 'id' | 'createdAt' | 'updatedAt'> & { id?: string },
+  ): Promise<void> {
+    const now = Date.now()
+    await mutate((draft) => {
+      const existing = input.id ? draft.wishes.find((wish) => wish.id === input.id) : undefined
+      const values = {
+        personId: input.personId,
+        title: input.title.trim(),
+        url: input.url?.trim() || undefined,
+        note: input.note?.trim() || undefined,
+        status: input.status,
+      }
+      if (existing) Object.assign(existing, values, { updatedAt: now })
+      else draft.wishes.push({ id: crypto.randomUUID(), ...values, createdAt: now, updatedAt: now })
+    })
+  }
+
+  async function removeWish(wishId: string): Promise<void> {
+    await mutate((draft) => {
+      draft.wishes = draft.wishes.filter((wish) => wish.id !== wishId)
+    })
+  }
+
+  function wishesFor(personId: string): WishItem[] {
+    return (data.value?.wishes ?? []).filter((wish) => wish.personId === personId)
+  }
+
+  function readDefaultCalendar(): string | undefined {
+    try {
+      return localStorage.getItem(DEFAULT_CALENDAR_KEY) ?? undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  function setDefaultCalendar(calendarId: string): void {
+    defaultCalendarId.value = calendarId
+    try {
+      localStorage.setItem(DEFAULT_CALENDAR_KEY, calendarId)
+    } catch {
+      // Applies for this session.
+    }
+  }
+
+  /**
+   * Reads the coming weeks from the phone's calendar. Linked appointments get
+   * their copied title and time refreshed, so moves in the calendar show up.
+   */
+  async function refreshCalendar(): Promise<void> {
+    const gateway = getDeviceCalendarGateway()
+    try {
+      calendarPermission.value = await gateway.permission()
+      if (calendarPermission.value !== 'granted') return
+      const now = Date.now()
+      const [events, available] = await Promise.all([
+        gateway.listEvents(now - 7 * DAY, now + 90 * DAY),
+        gateway.listCalendars(),
+      ])
+      calendarEvents.value = events
+      calendars.value = available
+      const moved = (data.value?.calendarLinks ?? []).some((link) => {
+        const event = events.find((candidate) => candidate.id === link.eventId)
+        return event && (event.title !== link.title || event.location !== link.location)
+      })
+      if (moved) {
+        await mutate((draft) => {
+          for (const link of draft.calendarLinks) {
+            const event = events.find((candidate) => sameOccurrence(link, candidate))
+            if (!event) continue
+            link.title = event.title
+            link.location = event.location
+            link.endsAt = event.endsAt
+          }
+        })
+      }
+    } catch {
+      // Calendar access is optional; Kindy keeps working without it.
+    }
+  }
+
+  async function connectCalendar(): Promise<void> {
+    calendarPermission.value = await getDeviceCalendarGateway().requestPermission()
+    await refreshCalendar()
+  }
+
+  async function linkCalendarEvent(event: DeviceCalendarEvent, personIds: string[]): Promise<void> {
+    await mutate((draft) => {
+      draft.calendarLinks = draft.calendarLinks.filter((link) => !sameOccurrence(link, event))
+      draft.calendarLinks.push({
+        id: crypto.randomUUID(),
+        eventId: event.id,
+        calendarId: event.calendarId,
+        title: event.title,
+        startsAt: event.startsAt,
+        endsAt: event.endsAt,
+        allDay: event.allDay,
+        location: event.location,
+        personIds: [...personIds],
+        status: 'linked',
+        createdBy: 'calendar',
+        createdAt: Date.now(),
+      })
+    })
+  }
+
+  async function ignoreCalendarEvent(event: DeviceCalendarEvent): Promise<void> {
+    await mutate((draft) => {
+      draft.calendarLinks.push({
+        id: crypto.randomUUID(),
+        eventId: event.id,
+        calendarId: event.calendarId,
+        title: event.title,
+        startsAt: event.startsAt,
+        allDay: event.allDay,
+        personIds: [],
+        status: 'ignored',
+        createdBy: 'calendar',
+        createdAt: Date.now(),
+      })
+    })
+  }
+
+  async function unlinkCalendarEvent(linkId: string): Promise<void> {
+    await mutate((draft) => {
+      draft.calendarLinks = draft.calendarLinks.filter((link) => link.id !== linkId)
+    })
+  }
+
+  /** Adds an appointment to the phone's calendar and links it to the people involved. */
+  async function createAppointment(input: NewAppointment): Promise<void> {
+    const gateway = getDeviceCalendarGateway()
+    if (calendarPermission.value !== 'granted') await connectCalendar()
+    if (calendarPermission.value !== 'granted') throw new Error('Calendar permission denied')
+    const calendarId =
+      (calendars.value.some((calendar) => calendar.id === defaultCalendarId.value)
+        ? defaultCalendarId.value
+        : undefined) ??
+      calendars.value.find((calendar) => calendar.isPrimary)?.id ??
+      calendars.value[0]?.id
+    if (!calendarId) throw new Error('No writable calendar')
+    const { id } = await gateway.createEvent({
+      calendarId,
+      title: input.title.trim(),
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+      allDay: input.allDay,
+      location: input.location?.trim() || undefined,
+    })
+    await mutate((draft) => {
+      draft.calendarLinks.push({
+        id: crypto.randomUUID(),
+        eventId: id,
+        calendarId,
+        title: input.title.trim(),
+        startsAt: input.startsAt,
+        endsAt: input.endsAt,
+        allDay: input.allDay,
+        location: input.location?.trim() || undefined,
+        personIds: [...input.personIds],
+        status: 'linked',
+        createdBy: 'kindy',
+        createdAt: Date.now(),
+      })
+    })
+    await refreshCalendar()
+  }
+
   async function resetDemoData(): Promise<void> {
     if (!import.meta.env.DEV) return
     const { demoData } = await import('@/fixtures/demo')
@@ -630,6 +940,11 @@ export const useKindyStore = defineStore('kindy', () => {
     pendingSyncCount,
     lastBackupAt,
     backupState,
+    calendarPermission,
+    calendarEvents,
+    calendars,
+    defaultCalendarId,
+    calendarSuggestions,
     initialize,
     refresh,
     lock,
@@ -656,6 +971,19 @@ export const useKindyStore = defineStore('kindy', () => {
     backupNow,
     findCloudBackup,
     restoreFromCloud,
+    linkedToGoogle,
+    updatePerson,
+    googlePhoto,
+    saveWish,
+    removeWish,
+    wishesFor,
+    setDefaultCalendar,
+    refreshCalendar,
+    connectCalendar,
+    linkCalendarEvent,
+    ignoreCalendarEvent,
+    unlinkCalendarEvent,
+    createAppointment,
     resetDemoData,
     importExternalContacts,
     search,

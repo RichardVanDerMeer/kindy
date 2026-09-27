@@ -8,14 +8,17 @@ export type AgendaKind =
   | 'memorial-birth'
   | 'custom'
   | 'reminder'
+  | 'appointment'
 
 /** Filter groups shown in the Upcoming view. */
-export type AgendaFilter = 'birthday' | 'wedding' | 'memorial' | 'reminder' | 'other'
+export type AgendaFilter =
+  'birthday' | 'wedding' | 'memorial' | 'appointment' | 'reminder' | 'other'
 
 export const agendaFilters: AgendaFilter[] = [
   'birthday',
   'wedding',
   'memorial',
+  'appointment',
   'reminder',
   'other',
 ]
@@ -30,8 +33,11 @@ export interface AgendaItem {
   personIds: EntityId[]
   /** Age, years married or years since, when the original year is known. */
   years?: number
-  /** Title for custom events and reminders. */
+  /** Title for custom events, reminders and appointments. */
   title?: string
+  /** Start time of an appointment; absent for whole-day items. */
+  startsAt?: number
+  location?: string
 }
 
 export interface CalendarDay {
@@ -68,6 +74,8 @@ export function agendaFilterFor(kind: AgendaKind): AgendaFilter {
       return 'memorial'
     case 'reminder':
       return 'reminder'
+    case 'appointment':
+      return 'appointment'
     default:
       return 'other'
   }
@@ -191,8 +199,28 @@ export function buildAgenda(
     })
   }
 
+  for (const link of data.calendarLinks) {
+    if (link.status !== 'linked') continue
+    const day = calendarDay(new Date(link.startsAt))
+    const offset = dayNumber(day) - todayNumber
+    if (offset < -window.daysBack || offset > window.daysAhead) continue
+    items.push({
+      id: link.id,
+      kind: 'appointment',
+      date: isoDay(day),
+      daysFromToday: offset,
+      personIds: link.personIds.filter((id) => activePeople.has(id)),
+      title: link.title,
+      startsAt: link.allDay ? undefined : link.startsAt,
+      location: link.location,
+    })
+  }
+
   return items.sort(
-    (left, right) => left.daysFromToday - right.daysFromToday || left.id.localeCompare(right.id),
+    (left, right) =>
+      left.daysFromToday - right.daysFromToday ||
+      (left.startsAt ?? 0) - (right.startsAt ?? 0) ||
+      left.id.localeCompare(right.id),
   )
 }
 

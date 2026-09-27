@@ -5,7 +5,7 @@ import type { KindyData } from '@/domain/model'
 
 function data(overrides: Partial<KindyData> = {}): KindyData {
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     people: [],
     externalIdentities: [],
     circles: [],
@@ -17,6 +17,8 @@ function data(overrides: Partial<KindyData> = {}): KindyData {
     reminderOccurrences: [],
     interactions: [],
     syncQueue: [],
+    wishes: [],
+    calendarLinks: [],
     ...overrides,
   }
 }
@@ -36,7 +38,7 @@ const robin = {
 describe('backups', () => {
   it('round-trips all Kindy data', () => {
     const original = data({ people: [robin] })
-    const backup = readBackup(createBackup(original, 42), 5)
+    const backup = readBackup(createBackup(original, 42), 6)
     expect(backup.createdAt).toBe(42)
     expect(backup.data).toEqual(original)
   })
@@ -45,16 +47,16 @@ describe('backups', () => {
     const old = JSON.parse(createBackup(data({ people: [robin] }), 1))
     old.data.schemaVersion = 4
     delete old.data.syncQueue
-    const restored = readBackup(JSON.stringify(old), 5)
+    const restored = readBackup(JSON.stringify(old), 6)
     expect(restored.data.syncQueue).toEqual([])
-    expect(restored.data.schemaVersion).toBe(5)
+    expect(restored.data.schemaVersion).toBe(6)
   })
 
   it('rejects other files and backups from a newer Kindy', () => {
-    expect(() => readBackup('{"hello":1}', 5)).toThrow(BackupError)
-    expect(() => readBackup('not json', 5)).toThrow(BackupError)
+    expect(() => readBackup('{"hello":1}', 6)).toThrow(BackupError)
+    expect(() => readBackup('not json', 6)).toThrow(BackupError)
     const newer = JSON.parse(createBackup(data({ schemaVersion: 9 }), 1))
-    expect(() => readBackup(JSON.stringify(newer), 5)).toThrow(/newer Kindy/)
+    expect(() => readBackup(JSON.stringify(newer), 6)).toThrow(/newer Kindy/)
   })
 
   it('never lets an empty Kindy overwrite a backup', () => {

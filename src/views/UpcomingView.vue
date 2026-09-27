@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ChevronDown, ChevronUp, Plus } from '@lucide/vue'
+import { CalendarPlus, ChevronDown, ChevronUp, Plus } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 
 import AddAgendaItemDialog, { type AgendaDraft } from '@/components/AddAgendaItemDialog.vue'
 import AgendaCard from '@/components/AgendaCard.vue'
+import CalendarSuggestions from '@/components/CalendarSuggestions.vue'
 import ViewHeader from '@/components/ViewHeader.vue'
 import {
   agendaFilters,
@@ -28,8 +29,18 @@ const syncedPersonIds = computed(() =>
     : [],
 )
 
+const addError = ref<string>()
+
 async function save(draft: AgendaDraft): Promise<void> {
-  if (draft.kind === 'memo') await store.addMemo(draft)
+  addError.value = undefined
+  if (draft.kind === 'appointment') {
+    try {
+      await store.createAppointment(draft)
+    } catch {
+      addError.value = t('agendaAdd.appointment.failed')
+      return
+    }
+  } else if (draft.kind === 'memo') await store.addMemo(draft)
   else if (draft.kind === 'birthday') await store.setBirthDate(draft.personId, draft.date)
   else if (draft.kind === 'death') await store.markDeceased(draft.personId, draft.date)
   else await store.addWeddingAnniversary(draft.personIds, draft.date)
@@ -74,6 +85,19 @@ const groups = computed(() => {
   <section class="view upcoming-view">
     <ViewHeader />
     <h1>{{ $t('upcoming.title') }}</h1>
+
+    <button
+      v-if="store.calendarPermission !== 'granted'"
+      class="calendar-connect card"
+      @click="store.connectCalendar()"
+    >
+      <CalendarPlus :size="20" />
+      <span>
+        <strong>{{ $t('calendar.connect') }}</strong>
+        <small>{{ $t('calendar.connectHint') }}</small>
+      </span>
+    </button>
+    <CalendarSuggestions :limit="2" />
 
     <div class="filter-row" role="group" :aria-label="$t('upcoming.title')">
       <button
@@ -134,6 +158,7 @@ const groups = computed(() => {
       :open="showAdd"
       :candidates="store.people"
       :synced-person-ids="syncedPersonIds"
+      :error="addError"
       @close="showAdd = false"
       @save="save"
     />

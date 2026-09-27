@@ -1,7 +1,7 @@
 import type { capSQLiteVersionUpgrade } from '@capacitor-community/sqlite'
 
 export const DATABASE_NAME = 'kindy'
-export const DATABASE_VERSION = 5
+export const DATABASE_VERSION = 6
 
 const migrationOne = `
 PRAGMA foreign_keys = ON;
@@ -240,6 +240,39 @@ CREATE TABLE IF NOT EXISTS sync_operations (
 );
 `
 
+const migrationSix = `
+ALTER TABLE people ADD COLUMN sync_exclusions_json TEXT;
+CREATE TABLE IF NOT EXISTS wish_items (
+  id TEXT PRIMARY KEY NOT NULL,
+  person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  url TEXT,
+  note TEXT,
+  status TEXT NOT NULL CHECK(status IN ('idea', 'bought', 'given')),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS calendar_links (
+  id TEXT PRIMARY KEY NOT NULL,
+  event_id TEXT NOT NULL,
+  calendar_id TEXT,
+  title TEXT NOT NULL,
+  starts_at INTEGER NOT NULL,
+  ends_at INTEGER,
+  all_day INTEGER NOT NULL DEFAULT 0,
+  location TEXT,
+  status TEXT NOT NULL CHECK(status IN ('linked', 'ignored')),
+  created_by TEXT NOT NULL CHECK(created_by IN ('kindy', 'calendar')),
+  created_at INTEGER NOT NULL,
+  UNIQUE(event_id, starts_at)
+);
+CREATE TABLE IF NOT EXISTS calendar_link_people (
+  link_id TEXT NOT NULL REFERENCES calendar_links(id) ON DELETE CASCADE,
+  person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+  PRIMARY KEY(link_id, person_id)
+);
+`
+
 export const migrations: capSQLiteVersionUpgrade[] = [
   {
     toVersion: 1,
@@ -260,5 +293,9 @@ export const migrations: capSQLiteVersionUpgrade[] = [
   {
     toVersion: 5,
     statements: [migrationFive],
+  },
+  {
+    toVersion: 6,
+    statements: [migrationSix],
   },
 ]

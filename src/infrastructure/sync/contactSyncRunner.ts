@@ -1,4 +1,9 @@
-import { managedContactFields, planContactUpdate } from '@/domain/contactSync'
+import {
+  managedContactFields,
+  planContactUpdate,
+  uploadablePhoto,
+  writtenAfterSync,
+} from '@/domain/contactSync'
 import type { ExternalIdentity, KindyData, Person, SyncOperation } from '@/domain/model'
 import type { ExternalContactsGateway, KindyRepository } from '@/domain/ports'
 
@@ -58,7 +63,9 @@ export async function runContactSync(deps: {
         continue
       }
       const current = managedContactFields(person.id, snapshot, deps.labels)
+      const excluded = person.syncExclusions ?? []
       const identity = linkedIdentity(snapshot, person.id)
+      const photo = excluded.includes('photo') ? undefined : uploadablePhoto(person.photoRef)
 
       if (!identity && operation.kind === 'create') {
         const created = await deps.gateway.createContact({
@@ -66,9 +73,10 @@ export async function runContactSync(deps: {
           familyName: person.familyName,
           birthday: current.birthday,
           events: current.events,
-          phones: values(person, 'phone'),
-          emails: values(person, 'email'),
+          phones: excluded.includes('phones') ? [] : values(person, 'phone'),
+          emails: excluded.includes('emails') ? [] : values(person, 'email'),
         })
+        if (photo) await deps.gateway.updateContactPhoto(created.resourceName, photo)
         outcomes.push({
           operation,
           ok: true,
@@ -80,7 +88,7 @@ export async function runContactSync(deps: {
             providerResourceId: created.resourceName,
             etag: created.etag,
             lastSyncedAt: now(),
-            writtenFields: current,
+            writtenFields: writtenAfterSync(undefined, current, excluded),
           },
         })
         continue
@@ -91,15 +99,23 @@ export async function runContactSync(deps: {
       }
 
       const remote = await deps.gateway.getContactFields(identity.providerResourceId)
-      const plan = planContactUpdate(remote, identity.writtenFields, current)
-      const etag = plan
+      const plan = planContactUpdate(remote, identity.writtenFields, current, excluded)
+      let etag = plan
         ? (await deps.gateway.updateContactFields(identity.providerResourceId, remote.etag, plan))
             .etag
         : remote.etag
+      if (photo && current.photoHash !== identity.writtenFields?.photoHash) {
+        etag = (await deps.gateway.updateContactPhoto(identity.providerResourceId, photo)).etag
+      }
       outcomes.push({
         operation,
         ok: true,
-        identity: { ...identity, etag, lastSyncedAt: now(), writtenFields: current },
+        identity: {
+          ...identity,
+          etag,
+          lastSyncedAt: now(),
+          writtenFields: writtenAfterSync(identity.writtenFields, current, excluded),
+        },
       })
     } catch (error) {
       outcomes.push({ operation, ok: false, error: describe(error) })

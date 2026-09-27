@@ -1,3 +1,4 @@
+import type { DeviceCalendarEvent } from './calendar'
 import type { ContactUpdate, RemoteContactFields } from './contactSync'
 import type {
   Circle,
@@ -76,6 +77,8 @@ export interface ExternalContactsGateway {
     update: ContactUpdate,
   ): Promise<{ etag: string }>
   createContact(input: NewExternalContact): Promise<{ resourceName: string; etag: string }>
+  /** Replaces the contact photo with an image given as a data URL. */
+  updateContactPhoto(resourceName: string, photo: string): Promise<{ etag: string }>
   revoke(): Promise<void>
 }
 
@@ -165,4 +168,33 @@ export interface Clock {
 
 export interface IdGenerator {
   next(): string
+}
+
+export type CalendarPermission = 'granted' | 'denied' | 'prompt'
+
+export interface DeviceCalendar {
+  id: string
+  name: string
+  accountName?: string
+  isPrimary: boolean
+}
+
+export interface NewCalendarEvent {
+  calendarId: string
+  title: string
+  startsAt: number
+  endsAt: number
+  allDay: boolean
+  location?: string
+  description?: string
+}
+
+/** The phone's own calendar storage, which holds Google and other calendars alike. */
+export interface DeviceCalendarGateway {
+  permission(): Promise<CalendarPermission>
+  requestPermission(): Promise<CalendarPermission>
+  /** Calendars Kindy may add appointments to. */
+  listCalendars(): Promise<DeviceCalendar[]>
+  listEvents(from: number, to: number): Promise<DeviceCalendarEvent[]>
+  createEvent(input: NewCalendarEvent): Promise<{ id: string }>
 }

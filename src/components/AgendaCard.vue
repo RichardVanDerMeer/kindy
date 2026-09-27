@@ -1,6 +1,17 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Bell, Cake, CalendarHeart, Flower2, Heart, Mail, MessageCircle, Phone } from '@lucide/vue'
+import {
+  Bell,
+  Cake,
+  CalendarClock,
+  CalendarHeart,
+  Flower2,
+  Gift,
+  Heart,
+  Mail,
+  MessageCircle,
+  Phone,
+} from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -25,12 +36,20 @@ const people = computed(() =>
 )
 /** The person to open and contact: skip the user themselves, e.g. on a shared wedding day. */
 const primary = computed(() => people.value.find((person) => !person.isSelf) ?? people.value[0])
-/** Wedding days and anniversaries show both partners when both are known. */
+/** Wedding days, anniversaries and shared appointments show two people when known. */
 const couple = computed(() =>
-  (props.item.kind === 'wedding-anniversary' || props.item.kind === 'anniversary') &&
+  (props.item.kind === 'wedding-anniversary' ||
+    props.item.kind === 'anniversary' ||
+    props.item.kind === 'appointment') &&
   people.value.length >= 2
     ? people.value.slice(0, 2)
     : undefined,
+)
+/** Open wishes turn a birthday into a reminder of gift ideas. */
+const openWishes = computed(() =>
+  props.item.kind === 'birthday' && primary.value
+    ? store.wishesFor(primary.value.id).filter((wish) => wish.status !== 'given').length
+    : 0,
 )
 const firstName = (person: Person) => person.givenName ?? person.displayName
 
@@ -45,6 +64,14 @@ const title = computed(() => {
 
 const detail = computed(() => {
   if (props.item.kind === 'reminder') return t('upcoming.details.reminder')
+  if (props.item.kind === 'appointment') {
+    const time = props.item.startsAt
+      ? new Intl.DateTimeFormat(locale.value, { hour: '2-digit', minute: '2-digit' }).format(
+          props.item.startsAt,
+        )
+      : t('calendar.allDay')
+    return [time, props.item.location].filter(Boolean).join(' · ')
+  }
   if (!props.item.years) return ''
   const key = `upcoming.details.${props.item.kind}`
   return t(key, { count: props.item.years }, props.item.years)
@@ -73,6 +100,8 @@ const icon = computed(() => {
       return Flower2
     case 'reminder':
       return Bell
+    case 'appointment':
+      return CalendarClock
     default:
       return CalendarHeart
   }
@@ -140,7 +169,15 @@ function open(): void {
         <small v-if="detail">{{ detail }}</small>
       </span>
     </button>
-    <div v-if="!compact && (phone || email)" class="agenda-card__actions">
+    <div v-if="!compact && (phone || email || openWishes)" class="agenda-card__actions">
+      <RouterLink
+        v-if="openWishes && primary"
+        class="contact-action contact-action--gift"
+        :to="{ path: `/people/${primary.id}`, hash: '#wishlist' }"
+        :aria-label="t('wishes.giftFor', { name: firstName(primary) })"
+      >
+        <Gift :size="18" /> <span>{{ openWishes }}</span>
+      </RouterLink>
       <a
         v-if="phone"
         class="contact-action"
