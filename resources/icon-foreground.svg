@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108"><defs><linearGradient id="gap" gradientUnits="userSpaceOnUse" x1="-13.5" y1="-9.75" x2="121.5" y2="125.25"><stop offset="0" stop-color="#C9B4FF"/><stop offset="1" stop-color="#8C63F2"/></linearGradient></defs>
+<g transform="translate(0 -3) translate(54 54) scale(0.8) translate(-54 -54)">
+<path d="M28,78 C28,66.4 35.2,58 44,58 C52.8,58 60,66.4 60,78 Z" fill="#FFF5E8"/>
+<path d="M34.5,44 a9.5,9.5 0 1,0 19,0 a9.5,9.5 0 1,0 -19,0" fill="#FFF5E8"/>
+<path d="M46,82 C46,69.5 54.1,61 64,61 C73.9,61 82,69.5 82,82 Z" fill="none" stroke="url(#gap)" stroke-width="4.5"/>
+<path d="M53.5,47 a10.5,10.5 0 1,0 21,0 a10.5,10.5 0 1,0 -21,0" fill="none" stroke="url(#gap)" stroke-width="4.5"/>
+<path d="M46,82 C46,69.5 54.1,61 64,61 C73.9,61 82,69.5 82,82 Z" fill="#FF8C74"/>
+<path d="M53.5,47 a10.5,10.5 0 1,0 21,0 a10.5,10.5 0 1,0 -21,0" fill="#FF8C74"/>
+</g></svg>
