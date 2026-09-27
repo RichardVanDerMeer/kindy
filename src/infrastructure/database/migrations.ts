@@ -1,7 +1,7 @@
 import type { capSQLiteVersionUpgrade } from '@capacitor-community/sqlite'
 
 export const DATABASE_NAME = 'kindy'
-export const DATABASE_VERSION = 7
+export const DATABASE_VERSION = 8
 
 const migrationOne = `
 PRAGMA foreign_keys = ON;
@@ -277,6 +277,11 @@ const migrationSeven = `
 ALTER TABLE sync_operations ADD COLUMN fields_json TEXT;
 `
 
+const migrationEight = `
+ALTER TABLE people ADD COLUMN about TEXT;
+ALTER TABLE people ADD COLUMN jobs_json TEXT;
+`
+
 export const migrations: capSQLiteVersionUpgrade[] = [
   {
     toVersion: 1,
@@ -305,5 +310,9 @@ export const migrations: capSQLiteVersionUpgrade[] = [
   {
     toVersion: 7,
     statements: [migrationSeven],
+  },
+  {
+    toVersion: 8,
+    statements: [migrationEight],
   },
 ]

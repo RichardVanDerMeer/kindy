@@ -153,6 +153,9 @@ export class SqliteKindyRepository implements KindyRepository {
               day: Number(row.death_day),
             },
       memorialNote: optionalString(row.memorial_note),
+      about: optionalString(row.about),
+      jobs:
+        row.jobs_json == null ? undefined : (JSON.parse(String(row.jobs_json)) as Person['jobs']),
       howWeMet: optionalString(row.how_we_met),
       syncExclusions:
         row.sync_exclusions_json == null
@@ -731,9 +734,9 @@ export class SqliteKindyRepository implements KindyRepository {
   private async writePerson(person: Person): Promise<void> {
     const db = this.requireDatabase()
     await db.run(
-      `INSERT INTO people(id,display_name,given_name,middle_name,family_name,nickname,pronouns,photo_ref,is_self,is_favorite,is_archived,is_deceased,sync_exclusions_json,birth_year,birth_month,birth_day,death_year,death_month,death_day,memorial_note,how_we_met,created_at,updated_at,deleted_at)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-       ON CONFLICT(id) DO UPDATE SET display_name=excluded.display_name,given_name=excluded.given_name,middle_name=excluded.middle_name,family_name=excluded.family_name,nickname=excluded.nickname,pronouns=excluded.pronouns,photo_ref=excluded.photo_ref,is_self=excluded.is_self,is_favorite=excluded.is_favorite,is_archived=excluded.is_archived,is_deceased=excluded.is_deceased,sync_exclusions_json=excluded.sync_exclusions_json,birth_year=excluded.birth_year,birth_month=excluded.birth_month,birth_day=excluded.birth_day,death_year=excluded.death_year,death_month=excluded.death_month,death_day=excluded.death_day,memorial_note=excluded.memorial_note,how_we_met=excluded.how_we_met,updated_at=excluded.updated_at,deleted_at=excluded.deleted_at`,
+      `INSERT INTO people(id,display_name,given_name,middle_name,family_name,nickname,pronouns,photo_ref,is_self,is_favorite,is_archived,is_deceased,sync_exclusions_json,birth_year,birth_month,birth_day,death_year,death_month,death_day,memorial_note,about,jobs_json,how_we_met,created_at,updated_at,deleted_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET display_name=excluded.display_name,given_name=excluded.given_name,middle_name=excluded.middle_name,family_name=excluded.family_name,nickname=excluded.nickname,pronouns=excluded.pronouns,photo_ref=excluded.photo_ref,is_self=excluded.is_self,is_favorite=excluded.is_favorite,is_archived=excluded.is_archived,is_deceased=excluded.is_deceased,sync_exclusions_json=excluded.sync_exclusions_json,birth_year=excluded.birth_year,birth_month=excluded.birth_month,birth_day=excluded.birth_day,death_year=excluded.death_year,death_month=excluded.death_month,death_day=excluded.death_day,memorial_note=excluded.memorial_note,about=excluded.about,jobs_json=excluded.jobs_json,how_we_met=excluded.how_we_met,updated_at=excluded.updated_at,deleted_at=excluded.deleted_at`,
       [
         person.id,
         person.displayName,
@@ -755,6 +758,8 @@ export class SqliteKindyRepository implements KindyRepository {
         person.deathDate?.month ?? null,
         person.deathDate?.day ?? null,
         person.memorialNote ?? null,
+        person.about ?? null,
+        person.jobs?.length ? JSON.stringify(person.jobs) : null,
         person.howWeMet ?? null,
         person.createdAt,
         person.updatedAt,

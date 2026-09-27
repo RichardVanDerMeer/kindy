@@ -42,6 +42,10 @@ export interface Person {
   birthDate?: PartialDate
   deathDate?: PartialDate
   memorialNote?: string
+  /** "About": lasting background on this person, longer than interests, steadier than notes. */
+  about?: string
+  /** Work history; entries without an end are current. */
+  jobs?: Job[]
   howWeMet?: string
   /** Fields the user chose to keep only in Kindy; they are never written to Google. */
   syncExclusions?: SyncField[]
@@ -50,6 +54,15 @@ export interface Person {
   createdAt: number
   updatedAt: number
   deletedAt?: number
+}
+
+export interface Job {
+  id: EntityId
+  title?: string
+  employer?: string
+  /** Month the job started or ended, as YYYY-MM. */
+  startedOn?: string
+  endedOn?: string
 }
 
 export interface ExternalIdentity {
@@ -96,6 +109,9 @@ export interface WrittenContactFields {
   name?: ContactName
   phones?: string[]
   emails?: string[]
+  /** Labels per value ("mobile", "work", ...), sent to Google as its type. */
+  phoneTypes?: Record<string, string>
+  emailTypes?: Record<string, string>
   /** Hash of the last photo Kindy uploaded; photos themselves are not kept twice. */
   photoHash?: string
 }

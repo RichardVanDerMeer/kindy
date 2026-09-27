@@ -27,10 +27,10 @@ function contact(
   personId: string,
   kind: ContactPoint['kind'],
   value: string,
-  label = kind === 'phone' ? 'Mobiel' : 'Privé',
+  label = kind === 'phone' ? 'mobile' : 'home',
 ): ContactPoint {
   return {
-    id: `${personId}-${kind}`,
+    id: `${personId}-${kind}-${label}`,
     kind,
     label,
     value,
@@ -90,22 +90,37 @@ export const demoData: KindyData = {
     person('demo-richard', 'Richard van der Meer', {
       isSelf: true,
       birthDate: inDays(40, 1984),
-      contactPoints: [contact('demo-richard', 'phone', '+31 6 12345600')],
+      contactPoints: [
+        contact('demo-richard', 'phone', '+31 6 12345600'),
+        contact('demo-richard', 'phone', '+31 30 1234567', 'work'),
+        contact('demo-richard', 'email', 'richard@example.com'),
+        contact('demo-richard', 'address', 'Neude 11, 3512 AE Utrecht'),
+        contact('demo-richard', 'url', 'kindy-demo', 'linkedin'),
+        contact('demo-richard', 'url', 'kindy.demo', 'instagram'),
+      ],
       details: [
         {
           id: 'detail-richard-work',
           definitionId: 'occupation',
-          label: 'Werk',
+          label: 'occupation',
           value: 'Product designer',
+          valueType: 'text',
+          source: 'kindy',
+        },
+        {
+          id: 'detail-richard-employer',
+          definitionId: 'employer',
+          label: 'employer',
+          value: 'Voorbeeldbedrijf',
           valueType: 'text',
           source: 'kindy',
         },
         {
           id: 'detail-richard-interests',
           definitionId: 'interests',
-          label: 'Interesses',
+          label: 'interests',
           value: 'Technologie, wielrennen, koken',
-          valueType: 'text',
+          valueType: 'long-text',
           source: 'kindy',
         },
       ],
@@ -117,7 +132,7 @@ export const demoData: KindyData = {
       contactPoints: [
         contact('demo-sophie', 'phone', '+31 6 12345601'),
         contact('demo-sophie', 'email', 'sophie@example.com'),
-        contact('demo-sophie', 'address', 'Oudegracht 120, 3511 AZ Utrecht', 'Thuis'),
+        contact('demo-sophie', 'address', 'Oudegracht 120, 3511 AZ Utrecht', 'home'),
       ],
     }),
     person('demo-emma', 'Emma van der Meer', {
@@ -141,7 +156,7 @@ export const demoData: KindyData = {
       contactPoints: [
         contact('demo-els', 'phone', '+31 6 12345603'),
         contact('demo-els', 'email', 'els@example.com'),
-        contact('demo-els', 'address', 'Dorpsstraat 8, 8401 AB Gorredijk', 'Thuis'),
+        contact('demo-els', 'address', 'Dorpsstraat 8, 8401 AB Gorredijk', 'home'),
       ],
     }),
     person('demo-robin', 'Robin Chen', {
@@ -151,7 +166,7 @@ export const demoData: KindyData = {
       contactPoints: [
         contact('demo-robin', 'phone', '+31 6 23456701'),
         contact('demo-robin', 'email', 'robin@example.com'),
-        contact('demo-robin', 'address', 'Wilhelminapark 3, 3581 NA Utrecht', 'Thuis'),
+        contact('demo-robin', 'address', 'Wilhelminapark 3, 3581 NA Utrecht', 'home'),
       ],
     }),
     person('demo-daan', 'Daan Visser', {
@@ -176,7 +191,7 @@ export const demoData: KindyData = {
     person('demo-femke', 'Femke Mulder'),
     person('demo-anouk', 'Anouk Jansen', {
       photoRef: avatar('anouk'),
-      contactPoints: [contact('demo-anouk', 'email', 'anouk@example.com', 'Werk')],
+      contactPoints: [contact('demo-anouk', 'email', 'anouk@example.com', 'work')],
     }),
     person('demo-pieter', 'Pieter Hendriks'),
   ],

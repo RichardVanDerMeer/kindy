@@ -123,7 +123,7 @@ function submit(): void {
           </div>
           <label v-if="googleAvailable" class="check-field">
             <input v-model="newPerson.saveToGoogle" type="checkbox" />
-            <span>{{ $t('contactSync.saveToGoogle') }}</span>
+            <span>{{ $t('contactSync.alsoSave') }}</span>
           </label>
         </template>
         <template v-else>

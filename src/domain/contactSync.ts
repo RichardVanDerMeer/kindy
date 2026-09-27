@@ -8,6 +8,8 @@ import type {
   SyncField,
   WrittenContactFields,
 } from './model'
+import { normalizeContactLabel } from './contactLabels'
+import { divorceEnding } from './marriage'
 
 /** Google's own type for anniversaries; wedding days are written with it. */
 export const ANNIVERSARY_EVENT_TYPE = 'anniversary'
@@ -90,7 +92,9 @@ export function managedContactFields(
     .filter(
       (event) =>
         event.personIds.includes(personId) &&
-        (event.type === 'wedding-anniversary' || event.type === 'anniversary'),
+        (event.type === 'wedding-anniversary' || event.type === 'anniversary') &&
+        // Google holds the anniversaries of marriages that still last.
+        !divorceEnding(event, data.events),
     )
     .map((event) => ({ type: ANNIVERSARY_EVENT_TYPE, date: toContactDate(event.date) }))
   if (person?.isDeceased && person.deathDate) {
@@ -103,8 +107,21 @@ export function managedContactFields(
     name: { givenName: person?.givenName, familyName: person?.familyName },
     phones: contactValues(person, 'phone'),
     emails: contactValues(person, 'email'),
+    phoneTypes: contactTypes(person, 'phone'),
+    emailTypes: contactTypes(person, 'email'),
     photoHash: photo ? photoFingerprint(photo) : undefined,
   }
+}
+
+function contactTypes(
+  person: KindyData['people'][number] | undefined,
+  kind: 'phone' | 'email',
+): Record<string, string> {
+  return Object.fromEntries(
+    (person?.contactPoints ?? [])
+      .filter((point) => point.kind === kind)
+      .map((point) => [point.value, normalizeContactLabel(point.label)]),
+  )
 }
 
 function contactValues(
@@ -195,6 +212,7 @@ function mergeValues(
   previous: string[] | undefined,
   current: string[],
   normalize: (value: string) => string,
+  types: Record<string, string> = {},
 ): ContactValue[] | null {
   const written = new Set((previous ?? []).map(normalize))
   const merged = remote.filter((item) => !written.has(normalize(item.value)))
@@ -203,12 +221,21 @@ function mergeValues(
       merged.push(remote.find((item) => normalize(item.value) === normalize(value)) ?? { value })
     }
   }
+  // Kindy's label wins for the values it manages; other values keep Google's label.
+  const labelled = merged.map((item) => {
+    const kindyValue = current.find((value) => normalize(value) === normalize(item.value))
+    const type = kindyValue ? types[kindyValue] : undefined
+    return type && type !== item.type ? { ...item, type } : item
+  })
   const same =
-    merged.length === remote.length &&
-    merged.every((item) =>
-      remote.some((candidate) => normalize(candidate.value) === normalize(item.value)),
+    labelled.length === remote.length &&
+    labelled.every((item) =>
+      remote.some(
+        (candidate) =>
+          normalize(candidate.value) === normalize(item.value) && candidate.type === item.type,
+      ),
     )
-  return same ? null : merged
+  return same ? null : labelled
 }
 
 /**
@@ -248,6 +275,7 @@ export function planContactUpdate(
       previous?.phones,
       current.phones,
       normalizePhone,
+      current.phoneTypes,
     )
     if (phones) {
       update.updatePersonFields.push('phoneNumbers')
@@ -260,6 +288,7 @@ export function planContactUpdate(
       previous?.emails,
       current.emails,
       normalizeEmail,
+      current.emailTypes,
     )
     if (emails) {
       update.updatePersonFields.push('emailAddresses')

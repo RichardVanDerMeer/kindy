@@ -63,7 +63,7 @@ function submit(): void {
         </div>
         <label v-if="googleAvailable" class="check-field">
           <input v-model="saveToGoogle" type="checkbox" />
-          <span>{{ $t('contactSync.saveToGoogle') }}</span>
+          <span>{{ $t('contactSync.alsoSave') }}</span>
         </label>
         <div class="dialog__actions">
           <button type="button" class="button button--ghost" @click="$emit('close')">

@@ -1,3 +1,4 @@
+import { divorceEnding } from './marriage'
 import type { EntityId, ImportantEvent, KindyData, PartialDate } from './model'
 
 export type AgendaKind =
@@ -33,6 +34,8 @@ export interface AgendaItem {
   personIds: EntityId[]
   /** Age, years married or years since, when the original year is known. */
   years?: number
+  /** A memo that was ticked off: still shown, marked as done. */
+  done?: boolean
   /** Title for custom events, reminders and appointments. */
   title?: string
   /** Start time of an appointment; absent for whole-day items. */
@@ -129,20 +132,11 @@ export function buildAgenda(
   }
 
   const birthdayEventPeople = new Set<EntityId>()
-  const samePeople = (left: EntityId[], right: EntityId[]) =>
-    left.length === right.length && left.every((id) => right.includes(id))
-  const divorces = data.events.filter((event) => event.type === 'divorce')
-
   for (const event of data.events) {
     const personIds = event.personIds.filter((id) => activePeople.has(id))
     if (event.personIds.length && !personIds.length) continue
-    // A divorced couple's wedding day is no longer something to celebrate.
-    if (
-      event.type === 'wedding-anniversary' &&
-      divorces.some((divorce) => samePeople(divorce.personIds, event.personIds))
-    ) {
-      continue
-    }
+    // A marriage that ended in divorce is no longer celebrated; other marriages still are.
+    if (divorceEnding(event, data.events)) continue
     if (event.type === 'birthday') event.personIds.forEach((id) => birthdayEventPeople.add(id))
     addEventOccurrences(event, personIds)
   }
@@ -195,7 +189,7 @@ export function buildAgenda(
   }
 
   for (const occurrence of data.reminderOccurrences) {
-    if (occurrence.state !== 'scheduled') continue
+    if (occurrence.state !== 'scheduled' && occurrence.state !== 'completed') continue
     const reminder = data.reminders.find((candidate) => candidate.id === occurrence.reminderId)
     if (!reminder || reminder.isCancelled) continue
     const due = calendarDay(new Date(occurrence.snoozedUntil ?? occurrence.dueAt))
@@ -208,6 +202,7 @@ export function buildAgenda(
       daysFromToday: offset,
       personIds: reminder.personId ? [reminder.personId] : [],
       title: reminder.title,
+      done: occurrence.state === 'completed' || undefined,
     })
   }
 

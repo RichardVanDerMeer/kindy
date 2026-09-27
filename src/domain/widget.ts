@@ -54,7 +54,7 @@ export function buildComingUpSnapshot(
 ): ComingUpSnapshot {
   const selected = new Set(options.preferences.filters)
   const items = agenda
-    .filter((item) => item.daysFromToday >= 0 && item.daysFromToday <= DAYS_AHEAD)
+    .filter((item) => item.daysFromToday >= 0 && item.daysFromToday <= DAYS_AHEAD && !item.done)
     .filter((item) => matchesAgendaFilters(item, selected))
     .slice(0, MAX_ITEMS)
     .map((item): ComingUpWidgetItem => {

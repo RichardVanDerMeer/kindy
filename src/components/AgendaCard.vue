@@ -119,53 +119,59 @@ function open(): void {
       'agenda-card--past': item.daysFromToday < 0,
       'agenda-card--memorial': isMemorial,
       'agenda-card--compact': compact,
+      'agenda-card--done': item.done,
     }"
   >
-    <button class="agenda-card__main" :disabled="!primary" @click="open">
-      <span class="agenda-date" :aria-label="date.toLocaleDateString(locale)">
-        <strong>{{ new Intl.DateTimeFormat(locale, { day: 'numeric' }).format(date) }}</strong>
-        <span>{{ new Intl.DateTimeFormat(locale, { month: 'short' }).format(date) }}</span>
-      </span>
-      <span class="agenda-card__visual" :class="{ 'agenda-card__visual--pair': couple }">
-        <span v-if="couple" class="avatar-pair">
+    <div class="agenda-card__row">
+      <button class="agenda-card__main" :disabled="!primary" @click="open">
+        <span class="agenda-date" :aria-label="date.toLocaleDateString(locale)">
+          <strong>{{ new Intl.DateTimeFormat(locale, { day: 'numeric' }).format(date) }}</strong>
+          <span>{{ new Intl.DateTimeFormat(locale, { month: 'short' }).format(date) }}</span>
+        </span>
+        <span class="agenda-card__visual" :class="{ 'agenda-card__visual--pair': couple }">
+          <span v-if="couple" class="avatar-pair">
+            <PersonAvatar
+              v-for="partner in couple"
+              :key="partner.id"
+              :name="partner.displayName"
+              :photo-ref="partner.photoRef"
+              :deceased="partner.isDeceased"
+              size="tiny"
+            />
+          </span>
           <PersonAvatar
-            v-for="partner in couple"
-            :key="partner.id"
-            :name="partner.displayName"
-            :photo-ref="partner.photoRef"
-            :deceased="partner.isDeceased"
-            size="tiny"
+            v-else-if="primary"
+            :name="primary.displayName"
+            :photo-ref="primary.photoRef"
+            :deceased="primary.isDeceased"
+            size="small"
           />
+          <span class="agenda-card__badge" aria-hidden="true">
+            <component :is="icon" :size="13" />
+          </span>
         </span>
-        <PersonAvatar
-          v-else-if="primary"
-          :name="primary.displayName"
-          :photo-ref="primary.photoRef"
-          :deceased="primary.isDeceased"
-          size="small"
-        />
-        <span class="agenda-card__badge" aria-hidden="true">
-          <component :is="icon" :size="13" />
+        <span class="agenda-card__copy">
+          <span class="agenda-card__when">
+            <span v-if="item.daysFromToday === 0" class="today-pill">{{ relativeDay }}</span>
+            <template v-else>{{ relativeDay }}</template>
+          </span>
+          <strong>{{ title }}</strong>
+          <small v-if="item.done" class="agenda-card__done">{{ t('upcoming.doneLabel') }}</small>
+          <small v-else-if="detail">{{ detail }}</small>
         </span>
-      </span>
-      <span class="agenda-card__copy">
-        <span class="agenda-card__when">
-          <span v-if="item.daysFromToday === 0" class="today-pill">{{ relativeDay }}</span>
-          <template v-else>{{ relativeDay }}</template>
-        </span>
-        <strong>{{ title }}</strong>
-        <small v-if="detail">{{ detail }}</small>
-      </span>
-    </button>
-    <div v-if="!compact && (phone || email || openWishes || editable)" class="agenda-card__actions">
+      </button>
       <button
         v-if="item.kind === 'reminder'"
-        class="contact-action contact-action--done"
-        :aria-label="t('upcoming.markDone')"
-        @click="store.completeMemo(item.id)"
+        class="memo-check"
+        role="checkbox"
+        :aria-checked="Boolean(item.done)"
+        :aria-label="item.done ? t('upcoming.markOpen') : t('upcoming.markDone')"
+        @click="store.toggleMemoDone(item.id)"
       >
-        <Check :size="18" /> <span>{{ t('upcoming.done') }}</span>
+        <Check v-if="item.done" :size="16" :stroke-width="3" />
       </button>
+    </div>
+    <div v-if="!compact && (phone || email || openWishes || editable)" class="agenda-card__actions">
       <button
         v-if="editable"
         class="contact-action"

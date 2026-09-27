@@ -207,7 +207,7 @@ export function mapGooglePerson(person: GooglePerson): ExternalContactSnapshot |
     contactPoints.push({
       providerFieldId: fieldId(point.metadata, `phone-${index}`),
       kind: 'phone',
-      label: point.type ?? 'phone',
+      label: point.type ?? 'mobile',
       value: point.value,
     })
   })
@@ -216,7 +216,7 @@ export function mapGooglePerson(person: GooglePerson): ExternalContactSnapshot |
     contactPoints.push({
       providerFieldId: fieldId(point.metadata, `email-${index}`),
       kind: 'email',
-      label: point.type ?? 'email',
+      label: point.type ?? 'home',
       value: point.value,
     })
   })
@@ -225,7 +225,7 @@ export function mapGooglePerson(person: GooglePerson): ExternalContactSnapshot |
     contactPoints.push({
       providerFieldId: fieldId(point.metadata, `address-${index}`),
       kind: 'address',
-      label: point.type ?? 'address',
+      label: point.type ?? 'home',
       value: point.formattedValue,
     })
   })
@@ -234,7 +234,7 @@ export function mapGooglePerson(person: GooglePerson): ExternalContactSnapshot |
     contactPoints.push({
       providerFieldId: fieldId(point.metadata, `url-${index}`),
       kind: 'url',
-      label: point.type ?? 'url',
+      label: point.type ?? 'website',
       value: point.value,
     })
   })

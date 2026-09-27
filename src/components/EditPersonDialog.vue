@@ -3,11 +3,16 @@ import { computed, ref, watch } from 'vue'
 import { Cloud, CloudOff, ImagePlus, Plus, Trash2, X } from '@lucide/vue'
 
 import { readImageFile } from '@/composables/imageFile'
+import { emailLabels, normalizeContactLabel, phoneLabels } from '@/domain/contactLabels'
 import type { PartialDate, Person, SyncField } from '@/domain/model'
+import { jobsOf } from '@/domain/jobs'
+import { isSocialPlatform, socialPlatforms } from '@/domain/social'
 import { useKindyStore, type PersonEdit } from '@/stores/kindy'
 
+import LabelledListInput from './LabelledListInput.vue'
 import PartialDateInput from './PartialDateInput.vue'
 import PersonAvatar from './PersonAvatar.vue'
+import SocialIcon from './SocialIcon.vue'
 
 const props = defineProps<{ open: boolean; person: Person }>()
 const emit = defineEmits<{ close: []; saved: [] }>()
@@ -25,9 +30,20 @@ const linked = computed(() => store.linkedToGoogle(props.person.id))
 const syncActive = computed(() => linked.value && store.googleWriteBack)
 const excluded = computed(() => new Set(props.person.syncExclusions ?? []))
 
+const addressLabels = ['home', 'work', 'other'] as const
+function addJob(): void {
+  draft.value.jobs.push({ id: crypto.randomUUID() })
+}
+
 function fromPerson(): PersonEdit {
   const values = (kind: 'phone' | 'email' | 'address') =>
-    props.person.contactPoints.filter((point) => point.kind === kind).map((point) => point.value)
+    props.person.contactPoints
+      .filter((point) => point.kind === kind)
+      .map((point) => ({ value: point.value, label: normalizeContactLabel(point.label) }))
+  const detail = (definitionId: string) => {
+    const value = props.person.details.find((item) => item.definitionId === definitionId)?.value
+    return value === undefined ? undefined : String(value)
+  }
   return {
     givenName: props.person.givenName ?? props.person.displayName,
     familyName: props.person.familyName,
@@ -36,6 +52,20 @@ function fromPerson(): PersonEdit {
     phones: values('phone'),
     emails: values('email'),
     addresses: values('address'),
+    socials: props.person.contactPoints
+      .filter((point) => point.kind === 'url')
+      .map((point) =>
+        isSocialPlatform(point.label)
+          ? { platform: point.label, value: point.value }
+          : { platform: 'other', label: point.label, value: point.value },
+      ),
+    jobs: jobsOf(props.person).map((job) => ({
+      ...job,
+      // A job read from the older details gets a real id when it is saved.
+      id: job.id.startsWith('legacy-') ? crypto.randomUUID() : job.id,
+    })),
+    about: props.person.about,
+    interests: detail('interests'),
     photoRef: props.person.photoRef,
     isDeceased: props.person.isDeceased,
     deathDate: props.person.deathDate,
@@ -84,9 +114,11 @@ async function submit(): Promise<void> {
     props.person.id,
     {
       ...draft.value,
-      phones: [...draft.value.phones],
-      emails: [...draft.value.emails],
-      addresses: [...draft.value.addresses],
+      phones: draft.value.phones.map((entry) => ({ ...entry })),
+      emails: draft.value.emails.map((entry) => ({ ...entry })),
+      addresses: draft.value.addresses.map((entry) => ({ ...entry })),
+      socials: draft.value.socials.map((social) => ({ ...social })),
+      jobs: draft.value.jobs.map((job) => ({ ...job })),
       birthDate: birthDate.value ? { ...birthDate.value } : undefined,
       deathDate: draft.value.isDeceased && deathDate.value ? { ...deathDate.value } : undefined,
     },
@@ -186,20 +218,12 @@ async function submit(): Promise<void> {
             {{ $t('edit.phones') }}
             <component :is="syncIcon('phones')" v-if="syncIcon('phones')" :size="14" />
           </legend>
-          <div v-for="(_, index) in draft.phones" :key="`phone-${index}`" class="list-input">
-            <input v-model="draft.phones[index]" type="tel" autocomplete="off" />
-            <button
-              type="button"
-              class="icon-button"
-              :aria-label="$t('edit.remove')"
-              @click="draft.phones.splice(index, 1)"
-            >
-              <X :size="18" />
-            </button>
-          </div>
-          <button type="button" class="inline-action" @click="draft.phones.push('')">
-            <Plus :size="16" /> {{ $t('edit.addPhone') }}
-          </button>
+          <LabelledListInput
+            v-model="draft.phones"
+            :labels="phoneLabels"
+            input-type="tel"
+            :add-text="$t('edit.addPhone')"
+          />
         </fieldset>
 
         <fieldset class="field picker-field">
@@ -207,21 +231,118 @@ async function submit(): Promise<void> {
             {{ $t('edit.emails') }}
             <component :is="syncIcon('emails')" v-if="syncIcon('emails')" :size="14" />
           </legend>
-          <div v-for="(_, index) in draft.emails" :key="`email-${index}`" class="list-input">
-            <input v-model="draft.emails[index]" type="email" autocomplete="off" />
+          <LabelledListInput
+            v-model="draft.emails"
+            :labels="emailLabels"
+            input-type="email"
+            :add-text="$t('edit.addEmail')"
+          />
+        </fieldset>
+
+        <fieldset class="field picker-field">
+          <legend class="field-label">{{ $t('edit.addresses') }}</legend>
+          <LabelledListInput
+            v-model="draft.addresses"
+            :labels="addressLabels"
+            :add-text="$t('edit.addAddress')"
+          />
+        </fieldset>
+
+        <fieldset class="field picker-field">
+          <legend class="field-label">{{ $t('edit.work') }}</legend>
+          <div v-for="(job, index) in draft.jobs" :key="job.id" class="job-entry">
+            <div class="field-row">
+              <label class="field">
+                <span>{{ $t('details.occupation') }}</span>
+                <input v-model="job.title" autocomplete="off" />
+              </label>
+              <label class="field">
+                <span>{{ $t('details.employer') }}</span>
+                <input v-model="job.employer" autocomplete="off" />
+              </label>
+            </div>
+            <div class="field-row job-entry__dates">
+              <label class="field">
+                <span>{{ $t('edit.jobFrom') }}</span>
+                <input v-model="job.startedOn" type="month" />
+              </label>
+              <label class="field">
+                <span>{{ $t('edit.jobUntil') }}</span>
+                <input v-model="job.endedOn" type="month" :placeholder="$t('edit.jobNow')" />
+              </label>
+              <button
+                type="button"
+                class="icon-button"
+                :aria-label="$t('edit.removeJob')"
+                @click="draft.jobs.splice(index, 1)"
+              >
+                <Trash2 :size="17" />
+              </button>
+            </div>
+            <small v-if="!job.endedOn" class="field-hint">{{ $t('edit.jobCurrent') }}</small>
+          </div>
+          <button type="button" class="inline-action" @click="addJob">
+            <Plus :size="16" /> {{ $t('edit.addJob') }}
+          </button>
+          <label class="field job-interests">
+            <span>{{ $t('details.interests') }}</span>
+            <textarea v-model="draft.interests" rows="2" />
+          </label>
+        </fieldset>
+
+        <fieldset class="field picker-field">
+          <legend class="field-label">{{ $t('edit.socials') }}</legend>
+          <div
+            v-for="(social, index) in draft.socials"
+            :key="`social-${index}`"
+            class="list-input list-input--labelled"
+            :class="{ 'list-input--other': social.platform === 'other' }"
+          >
+            <span class="social-select">
+              <SocialIcon :platform="social.platform" :size="18" />
+              <select v-model="social.platform" :aria-label="$t('edit.platform')">
+                <option v-for="platform in socialPlatforms" :key="platform" :value="platform">
+                  {{ $t(`socials.${platform}`) }}
+                </option>
+                <option value="other">{{ $t('socials.other') }}</option>
+              </select>
+            </span>
+            <input
+              v-if="social.platform === 'other'"
+              v-model="social.label"
+              class="social-label"
+              :placeholder="$t('edit.ownLabel')"
+              autocomplete="off"
+            />
+            <input
+              v-model="social.value"
+              :placeholder="$t('edit.socialPlaceholder')"
+              autocomplete="off"
+              autocapitalize="off"
+            />
             <button
               type="button"
               class="icon-button"
               :aria-label="$t('edit.remove')"
-              @click="draft.emails.splice(index, 1)"
+              @click="draft.socials.splice(index, 1)"
             >
               <X :size="18" />
             </button>
           </div>
-          <button type="button" class="inline-action" @click="draft.emails.push('')">
-            <Plus :size="16" /> {{ $t('edit.addEmail') }}
+          <button
+            type="button"
+            class="inline-action"
+            @click="draft.socials.push({ platform: 'linkedin', value: '' })"
+          >
+            <Plus :size="16" /> {{ $t('edit.addSocial') }}
           </button>
+          <small class="field-hint">{{ $t('edit.localOnlyHint') }}</small>
         </fieldset>
+
+        <label class="field">
+          <span>{{ $t('edit.about', { name: draft.givenName || person.displayName }) }}</span>
+          <textarea v-model="draft.about" rows="4" :placeholder="$t('edit.aboutHint')" />
+        </label>
 
         <fieldset v-if="!person.isSelf" class="field picker-field memorial-fields">
           <legend class="field-label">
@@ -240,24 +361,6 @@ async function submit(): Promise<void> {
               <textarea v-model="draft.memorialNote" rows="2" />
             </label>
           </template>
-        </fieldset>
-
-        <fieldset class="field picker-field">
-          <legend class="field-label">{{ $t('edit.addresses') }}</legend>
-          <div v-for="(_, index) in draft.addresses" :key="`address-${index}`" class="list-input">
-            <input v-model="draft.addresses[index]" autocomplete="off" />
-            <button
-              type="button"
-              class="icon-button"
-              :aria-label="$t('edit.remove')"
-              @click="draft.addresses.splice(index, 1)"
-            >
-              <X :size="18" />
-            </button>
-          </div>
-          <button type="button" class="inline-action" @click="draft.addresses.push('')">
-            <Plus :size="16" /> {{ $t('edit.addAddress') }}
-          </button>
         </fieldset>
 
         <label v-if="syncActive" class="check-field">

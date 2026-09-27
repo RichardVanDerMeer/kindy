@@ -8,11 +8,12 @@ import {
   CalendarClock,
   CalendarDays,
   CalendarPlus,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Flower2,
   Heart,
   HeartCrack,
-  Link2,
   Mail,
   MapPin,
   MessageCircle,
@@ -41,13 +42,17 @@ import ContactSyncBadge from '@/components/ContactSyncBadge.vue'
 import EditPersonDialog from '@/components/EditPersonDialog.vue'
 import WishlistCard from '@/components/WishlistCard.vue'
 import PersonAvatar from '@/components/PersonAvatar.vue'
+import SocialIcon from '@/components/SocialIcon.vue'
 import RelationshipDiagram from '@/components/RelationshipDiagram.vue'
 import { calendarDay } from '@/domain/agenda'
 import type { AgendaDraft } from '@/domain/agendaDraft'
 import { inferGender, relationshipViewFor, siblingIds } from '@/domain/connections'
 import { ageBetween, formatPartialDate } from '@/domain/dates'
-import { safeWebUrl } from '@/domain/links'
+import { isKnownLabel, normalizeContactLabel } from '@/domain/contactLabels'
+import { isCurrentJob, jobLabel, jobsOf } from '@/domain/jobs'
+import { divorceEnding } from '@/domain/marriage'
 import { mapsUrl } from '@/domain/maps'
+import { socialDisplay, socialUrl } from '@/domain/social'
 import type { PartialDate, Person, RelationshipRole, SyncField } from '@/domain/model'
 import { connectedPersonId } from '@/domain/relationships'
 import { personTimeline, type TimelineEntry } from '@/domain/timeline'
@@ -63,6 +68,17 @@ const activeTab = ref<Tab>('overview')
 const showCirclePicker = ref(false)
 const showAddConnection = ref(false)
 const showAddNote = ref(false)
+/** Deleting a note takes two taps: the first asks for confirmation. */
+const confirmingNote = ref<string>()
+
+async function removeNote(noteId: string): Promise<void> {
+  if (confirmingNote.value !== noteId) {
+    confirmingNote.value = noteId
+    return
+  }
+  confirmingNote.value = undefined
+  await store.removeNote(noteId)
+}
 const showEdit = ref(false)
 const showAddDate = ref(false)
 const addDateError = ref<string>()
@@ -183,7 +199,43 @@ const weddings = computed(() =>
         .filter((id) => id !== props.id)
         .map((id) => store.personById(id))
         .filter((partner): partner is Person => Boolean(partner)),
+      endedBy: divorceEnding(event, store.data?.events ?? []),
     })),
+)
+
+/** Google's labels ("mobile", "work") in the user's language; custom labels as typed. */
+function contactLabel(label: string): string {
+  const normalized = normalizeContactLabel(label)
+  return isKnownLabel(normalized) ? t(`contactLabels.${normalized}`) : normalized
+}
+
+function detailValue(definitionId: string): string | undefined {
+  const value = person.value?.details.find((detail) => detail.definitionId === definitionId)?.value
+  return value === undefined || value === '' ? undefined : String(value)
+}
+/** Current jobs only; the full history is in the edit screen. */
+const currentJobs = computed(() =>
+  person.value ? jobsOf(person.value).filter((job) => isCurrentJob(job, new Date())) : [],
+)
+function jobSince(startedOn: string | undefined): string {
+  if (!startedOn) return ''
+  const [year = '', month = '1'] = startedOn.split('-')
+  return t('profile.since', {
+    date: new Intl.DateTimeFormat(locale.value, { month: 'long', year: 'numeric' }).format(
+      new Date(Number(year), Number(month) - 1, 1),
+    ),
+  })
+}
+/** Contact details are folded away to keep the overview short. */
+const showContact = ref(false)
+const contactCount = computed(
+  () => phones.value.length + emails.value.length + addresses.value.length + links.value.length,
+)
+const otherDetails = computed(
+  () =>
+    person.value?.details.filter(
+      (detail) => !['occupation', 'employer', 'interests'].includes(detail.definitionId),
+    ) ?? [],
 )
 
 const hasDetails = computed(
@@ -463,9 +515,19 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
           </strong>
         </div>
 
-        <div v-for="wedding in weddings" :key="wedding.id" class="detail-row">
+        <div
+          v-for="wedding in weddings"
+          :key="wedding.id"
+          class="detail-row"
+          :class="{ 'detail-row--ended': wedding.endedBy }"
+        >
           <Heart :size="20" />
-          <span>{{ $t('profile.weddingDay') }}</span>
+          <span
+            >{{ $t('profile.weddingDay') }}
+            <template v-if="wedding.endedBy">
+              · {{ $t('profile.divorcedOn', { date: formatDate(wedding.endedBy.date) }) }}
+            </template></span
+          >
           <strong class="detail-with-people">
             <span>{{ formatDate(wedding.date) }}</span>
             <span
@@ -490,85 +552,125 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
           </strong>
         </div>
 
-        <div v-for="point in phones" :key="point.id" class="detail-row detail-row--contact">
-          <Phone :size="20" />
+        <div v-for="job in currentJobs" :key="job.id" class="detail-row">
+          <BriefcaseBusiness :size="20" />
           <span
-            >{{ point.label }}
-            <CloudOff v-if="localOnly('phones')" :size="13" :aria-label="$t('edit.localOnly')"
-          /></span>
-          <strong class="detail-with-actions">
-            <a :href="`tel:${point.value}`">{{ point.value }}</a>
-            <span v-if="!person.isDeceased" class="detail-actions">
-              <a
-                class="contact-action"
-                :href="`tel:${point.value}`"
-                :aria-label="$t('upcoming.call', { name: person.givenName ?? person.displayName })"
-                ><Phone :size="17"
-              /></a>
-              <a
-                class="contact-action contact-action--whatsapp"
-                :href="whatsapp(point.value)"
-                target="_blank"
-                rel="noopener"
-                :aria-label="
-                  $t('upcoming.whatsapp', { name: person.givenName ?? person.displayName })
-                "
-                ><MessageCircle :size="17"
-              /></a>
-            </span>
-          </strong>
+            >{{ $t('edit.work')
+            }}<template v-if="job.startedOn"> · {{ jobSince(job.startedOn) }}</template></span
+          >
+          <strong>{{ jobLabel(job) }}</strong>
         </div>
 
-        <div v-for="point in emails" :key="point.id" class="detail-row detail-row--contact">
-          <Mail :size="20" />
-          <span
-            >{{ point.label }}
-            <CloudOff v-if="localOnly('emails')" :size="13" :aria-label="$t('edit.localOnly')"
-          /></span>
-          <strong class="detail-with-actions">
-            <a :href="`mailto:${point.value}`">{{ point.value }}</a>
-          </strong>
+        <div v-if="detailValue('interests')" class="detail-row">
+          <Sparkles :size="20" />
+          <span>{{ $t('details.interests') }}</span>
+          <strong>{{ detailValue('interests') }}</strong>
         </div>
 
-        <div v-for="point in addresses" :key="point.id" class="detail-row detail-row--contact">
-          <MapPin :size="20" />
-          <span>{{ $t('profile.address') }}</span>
-          <strong class="detail-with-actions">
-            <a :href="mapsUrl(point.value)" target="_blank" rel="noopener">{{ point.value }}</a>
-            <span class="detail-actions">
-              <a
-                class="contact-action"
-                :href="mapsUrl(point.value)"
-                target="_blank"
-                rel="noopener"
-                :aria-label="$t('profile.openInMaps')"
-                ><Navigation :size="17"
-              /></a>
-            </span>
-          </strong>
-        </div>
-
-        <div v-for="point in links" :key="point.id" class="detail-row">
-          <Link2 :size="20" />
-          <span>{{ point.label }}</span>
-          <strong>
-            <a
-              v-if="safeWebUrl(point.value)"
-              :href="safeWebUrl(point.value)"
-              target="_blank"
-              rel="noopener"
-              >{{ point.value }}</a
-            >
-            <template v-else>{{ point.value }}</template>
-          </strong>
-        </div>
-
-        <div v-for="detail in person.details" :key="detail.id" class="detail-row">
-          <BriefcaseBusiness v-if="detail.definitionId === 'occupation'" :size="20" />
-          <Heart v-else :size="20" />
+        <div v-for="detail in otherDetails" :key="detail.id" class="detail-row">
+          <Heart :size="20" />
           <span>{{ detail.label }}</span>
           <strong>{{ detail.value }}</strong>
         </div>
+
+        <button
+          v-if="contactCount"
+          class="contact-toggle"
+          :aria-expanded="showContact"
+          @click="showContact = !showContact"
+        >
+          <Phone :size="18" />
+          <span>{{ $t('profile.contactDetails') }}</span>
+          <small>{{ contactCount }}</small>
+          <component :is="showContact ? ChevronUp : ChevronDown" :size="18" />
+        </button>
+        <div v-if="showContact" class="contact-details">
+          <div v-for="point in phones" :key="point.id" class="detail-row detail-row--contact">
+            <Phone :size="20" />
+            <span
+              >{{ contactLabel(point.label) }}
+              <CloudOff v-if="localOnly('phones')" :size="13" :aria-label="$t('edit.localOnly')"
+            /></span>
+            <strong class="detail-with-actions">
+              <a :href="`tel:${point.value}`">{{ point.value }}</a>
+              <span v-if="!person.isDeceased" class="detail-actions">
+                <a
+                  class="contact-action"
+                  :href="`tel:${point.value}`"
+                  :aria-label="
+                    $t('upcoming.call', { name: person.givenName ?? person.displayName })
+                  "
+                  ><Phone :size="17"
+                /></a>
+                <a
+                  class="contact-action contact-action--whatsapp"
+                  :href="whatsapp(point.value)"
+                  target="_blank"
+                  rel="noopener"
+                  :aria-label="
+                    $t('upcoming.whatsapp', { name: person.givenName ?? person.displayName })
+                  "
+                  ><MessageCircle :size="17"
+                /></a>
+              </span>
+            </strong>
+          </div>
+
+          <div v-for="point in emails" :key="point.id" class="detail-row detail-row--contact">
+            <Mail :size="20" />
+            <span
+              >{{ contactLabel(point.label) }}
+              <CloudOff v-if="localOnly('emails')" :size="13" :aria-label="$t('edit.localOnly')"
+            /></span>
+            <strong class="detail-with-actions">
+              <a :href="`mailto:${point.value}`">{{ point.value }}</a>
+            </strong>
+          </div>
+
+          <div v-for="point in addresses" :key="point.id" class="detail-row detail-row--contact">
+            <MapPin :size="20" />
+            <span>{{ $t('profile.address') }} · {{ contactLabel(point.label) }}</span>
+            <strong class="detail-with-actions">
+              <a :href="mapsUrl(point.value)" target="_blank" rel="noopener">{{ point.value }}</a>
+              <span class="detail-actions">
+                <a
+                  class="contact-action"
+                  :href="mapsUrl(point.value)"
+                  target="_blank"
+                  rel="noopener"
+                  :aria-label="$t('profile.openInMaps')"
+                  ><Navigation :size="17"
+                /></a>
+              </span>
+            </strong>
+          </div>
+
+          <div v-for="point in links" :key="point.id" class="detail-row">
+            <SocialIcon :platform="point.label" />
+            <span>{{
+              $te(`socials.${point.label}`) ? $t(`socials.${point.label}`) : point.label
+            }}</span>
+            <strong>
+              <a
+                v-if="socialUrl(point.label, point.value)"
+                :href="socialUrl(point.label, point.value)"
+                target="_blank"
+                rel="noopener"
+                >{{ socialDisplay(point.label, point.value) }}</a
+              >
+              <template v-else>{{ point.value }}</template>
+            </strong>
+          </div>
+        </div>
+      </article>
+
+      <article class="card profile-card about-card">
+        <h2>{{ $t('profile.aboutTitle', { name: person.givenName ?? person.displayName }) }}</h2>
+        <p v-if="person.about" class="about-card__text">{{ person.about }}</p>
+        <button v-else class="inline-action" @click="showEdit = true">
+          <Pencil :size="16" />
+          {{ $t('profile.aboutEmpty', { name: person.givenName ?? person.displayName }) }}
+        </button>
       </article>
 
       <WishlistCard v-if="!person.isDeceased" :person-id="person.id" />
@@ -631,7 +733,16 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
       <button class="wide-action wide-action--top" @click="showAddNote = true">
         <NotebookPen :size="21" /> {{ $t('profile.addNote') }}
       </button>
-      <article v-for="note in notes" :key="note.id" class="card note-card">
+      <article v-for="note in notes" :key="note.id" class="card note-card note-card--removable">
+        <button
+          class="life-timeline__remove"
+          :class="{ 'life-timeline__remove--confirm': confirmingNote === note.id }"
+          :aria-label="$t('notes.remove')"
+          @click="removeNote(note.id)"
+        >
+          <template v-if="confirmingNote === note.id">{{ $t('timeline.confirmRemove') }}</template>
+          <Trash2 v-else :size="15" />
+        </button>
         <time>{{
           new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(note.occurredAt)
         }}</time>

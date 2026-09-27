@@ -29,6 +29,15 @@ const agenda: AgendaItem[] = [
     daysFromToday: 9,
     personIds: [],
   },
+  {
+    id: 'finished',
+    kind: 'reminder',
+    date: '2026-09-28',
+    daysFromToday: 1,
+    personIds: [],
+    title: 'Al gedaan',
+    done: true,
+  },
 ]
 
 function build(filters: AgendaItem['kind'][] | [], hideNames: boolean) {

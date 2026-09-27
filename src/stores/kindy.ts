@@ -7,6 +7,7 @@ import { createBackup, isWorthBackingUp, readBackup } from '@/domain/backup'
 import { sameOccurrence, suggestCalendarLinks, type DeviceCalendarEvent } from '@/domain/calendar'
 import { createConnection } from '@/domain/connections'
 import { enqueueSync, importedContactDates, managedContactFields } from '@/domain/contactSync'
+import { normalizeContactLabel } from '@/domain/contactLabels'
 import { safeWebUrl } from '@/domain/links'
 import {
   KINDY_SCHEMA_VERSION,
@@ -14,6 +15,7 @@ import {
   type ContactPoint,
   type KindyData,
   type PartialDate,
+  type Job,
   type Person,
   type RelationshipRole,
   type SyncField,
@@ -56,14 +58,26 @@ export type BackupState = 'idle' | 'running' | 'failed' | 'not-connected'
 
 const DEFAULT_CALENDAR_KEY = 'kindy.calendar.default'
 
+/** A phone number, email address or address with its label ("mobile", "work", ...). */
+export interface LabelledValue {
+  value: string
+  label: string
+}
+
 export interface PersonEdit {
   givenName: string
   familyName?: string
   nickname?: string
   birthDate?: PartialDate
-  phones: string[]
-  emails: string[]
-  addresses: string[]
+  phones: LabelledValue[]
+  emails: LabelledValue[]
+  addresses: LabelledValue[]
+  /** Social media and websites, e.g. { platform: 'linkedin', value: 'robin-chen' }. */
+  /** Social media and other links; `label` is the platform, or a user's own label. */
+  socials: Array<{ platform: string; label?: string; value: string }>
+  jobs: Job[]
+  interests?: string
+  about?: string
   photoRef?: string
   isDeceased: boolean
   deathDate?: PartialDate
@@ -102,8 +116,17 @@ function sameList(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index])
 }
 
-function points(person: Person, kind: 'phone' | 'email'): string[] {
-  return person.contactPoints.filter((point) => point.kind === kind).map((point) => point.value)
+/** Values with their labels, so a changed label also counts as a change. */
+function labelledPoints(person: Person, kind: 'phone' | 'email'): string[] {
+  return person.contactPoints
+    .filter((point) => point.kind === kind)
+    .map((point) => `${normalizeContactLabel(point.label)}|${point.value}`)
+}
+
+function cleanEntries(entries: LabelledValue[]): LabelledValue[] {
+  return entries
+    .map((entry) => ({ value: entry.value.trim(), label: entry.label.trim() || 'other' }))
+    .filter((entry) => entry.value)
 }
 
 function samePartialDate(left?: PartialDate, right?: PartialDate): boolean {
@@ -677,16 +700,24 @@ export const useKindyStore = defineStore('kindy', () => {
       if (!person) return
       const givenName = edit.givenName.trim()
       const familyName = edit.familyName?.trim() || undefined
-      const phones = edit.phones.map((value) => value.trim()).filter(Boolean)
-      const emails = edit.emails.map((value) => value.trim()).filter(Boolean)
-      const addresses = edit.addresses.map((value) => value.trim()).filter(Boolean)
+      const phones = cleanEntries(edit.phones)
+      const emails = cleanEntries(edit.emails)
+      const addresses = cleanEntries(edit.addresses)
+      const socials = edit.socials
+        .map((social) => ({
+          label: social.platform === 'other' ? social.label?.trim() || 'Link' : social.platform,
+          value: social.value.trim(),
+        }))
+        .filter((social) => social.value)
 
       const changed: SyncField[] = []
       if (givenName !== (person.givenName ?? '') || familyName !== person.familyName) {
         changed.push('name')
       }
-      if (!sameList(phones, points(person, 'phone'))) changed.push('phones')
-      if (!sameList(emails, points(person, 'email'))) changed.push('emails')
+      const keyed = (entries: LabelledValue[]) =>
+        entries.map((entry) => `${entry.label}|${entry.value}`)
+      if (!sameList(keyed(phones), labelledPoints(person, 'phone'))) changed.push('phones')
+      if (!sameList(keyed(emails), labelledPoints(person, 'email'))) changed.push('emails')
       if (!samePartialDate(edit.birthDate, person.birthDate)) changed.push('birthday')
       if (edit.photoRef !== person.photoRef) changed.push('photo')
       // A death is written to Google as an event.
@@ -711,10 +742,21 @@ export const useKindyStore = defineStore('kindy', () => {
       person.contactPoints = [
         ...updatedPoints(person, 'phone', phones),
         ...updatedPoints(person, 'email', emails),
-        // Addresses stay in Kindy; they are not written to Google.
+        // Addresses and social links stay in Kindy; they are not written to Google.
         ...updatedPoints(person, 'address', addresses),
-        ...person.contactPoints.filter((point) => point.kind === 'url'),
+        ...updatedPoints(person, 'url', socials),
       ]
+      person.jobs = edit.jobs
+        .map((job) => ({
+          id: job.id,
+          title: job.title?.trim() || undefined,
+          employer: job.employer?.trim() || undefined,
+          startedOn: job.startedOn || undefined,
+          endedOn: job.endedOn || undefined,
+        }))
+        .filter((job) => job.title || job.employer)
+      person.about = edit.about?.trim() || undefined
+      person.details = updatedDetails(person, { interests: edit.interests })
       person.updatedAt = Date.now()
 
       if (!changed.length || !isLinked(draft, personId)) return
@@ -729,28 +771,53 @@ export const useKindyStore = defineStore('kindy', () => {
     void syncGoogle()
   }
 
-  /** Keeps ids and labels of numbers that stayed, so Google keeps its labels too. */
+  /** Keeps the ids of values that stayed and takes the (possibly changed) label. */
   function updatedPoints(
     person: Person,
-    kind: 'phone' | 'email' | 'address',
-    values: string[],
+    kind: ContactPoint['kind'],
+    entries: LabelledValue[],
   ): ContactPoint[] {
     const existing = person.contactPoints.filter((point) => point.kind === kind)
-    return values.map((value, index) => {
-      const match = existing.find((point) => point.value === value)
-      return (
-        match ?? {
-          id: crypto.randomUUID(),
-          kind,
-          label: kind === 'phone' ? 'mobile' : 'home',
-          value,
-          normalizedValue:
-            kind === 'phone' ? value.replace(/[^\d+]/g, '') : value.toLocaleLowerCase(),
-          isPrimary: index === 0,
-          source: 'kindy' as const,
-        }
-      )
+    return entries.map((entry, index) => {
+      const match = existing.find((point) => point.value === entry.value)
+      if (match) return { ...match, label: entry.label, isPrimary: index === 0 }
+      return {
+        id: crypto.randomUUID(),
+        kind,
+        label: entry.label,
+        value: entry.value,
+        normalizedValue:
+          kind === 'phone' ? entry.value.replace(/[^\d+]/g, '') : entry.value.toLocaleLowerCase(),
+        isPrimary: index === 0,
+        source: 'kindy' as const,
+      }
     })
+  }
+
+  /** Work, employer and interests are details with fixed definitions. */
+  function updatedDetails(
+    person: Person,
+    values: Record<'interests', string | undefined>,
+  ): Person['details'] {
+    // Occupation and employer moved into the job list.
+    const managed = [...Object.keys(values), 'occupation', 'employer']
+    const kept = person.details.filter((detail) => !managed.includes(detail.definitionId))
+    const next = Object.entries(values).flatMap(([definitionId, value]) => {
+      const trimmed = value?.trim()
+      if (!trimmed) return []
+      const existing = person.details.find((detail) => detail.definitionId === definitionId)
+      return [
+        {
+          id: existing?.id ?? crypto.randomUUID(),
+          definitionId,
+          label: definitionId,
+          value: trimmed,
+          valueType: definitionId === 'interests' ? ('long-text' as const) : ('text' as const),
+          source: 'kindy' as const,
+        },
+      ]
+    })
+    return [...next, ...kept]
   }
 
   /** The contact photo in Google, if the person is linked and has one. */
@@ -1046,7 +1113,10 @@ export const useKindyStore = defineStore('kindy', () => {
         personIds: [...input.personIds],
         source: 'kindy',
       })
+      // The ended marriage's anniversary is taken out of linked Google contacts.
+      if (input.type === 'divorce') queueContactUpdates(draft, input.personIds, ['events'])
     })
+    if (input.type === 'divorce') void syncGoogle()
   }
 
   /** Removes a date. Linked contacts get the change too, when it is one Google holds. */
@@ -1062,10 +1132,18 @@ export const useKindyStore = defineStore('kindy', () => {
     void syncGoogle()
   }
 
-  async function completeMemo(occurrenceId: string): Promise<void> {
+  /** Ticks a memo off, or back on. A finished memo stays visible as done. */
+  async function toggleMemoDone(occurrenceId: string): Promise<void> {
     await mutate((draft) => {
       const occurrence = draft.reminderOccurrences.find((item) => item.id === occurrenceId)
-      if (occurrence) occurrence.state = 'completed'
+      if (!occurrence) return
+      occurrence.state = occurrence.state === 'completed' ? 'scheduled' : 'completed'
+    })
+  }
+
+  async function removeNote(noteId: string): Promise<void> {
+    await mutate((draft) => {
+      draft.notes = draft.notes.filter((note) => note.id !== noteId)
     })
   }
 
@@ -1196,7 +1274,8 @@ export const useKindyStore = defineStore('kindy', () => {
     createAppointment,
     addLifeEvent,
     removeEvent,
-    completeMemo,
+    toggleMemoDone,
+    removeNote,
     addFromDraft,
     resetDemoData,
     importExternalContacts,
