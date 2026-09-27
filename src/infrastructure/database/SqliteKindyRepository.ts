@@ -18,6 +18,7 @@ import type {
   Relationship,
   Reminder,
   ReminderOccurrence,
+  SyncOperation,
   UpcomingItem,
 } from '@/domain/model'
 import type { KindyRepository } from '@/domain/ports'
@@ -88,6 +89,7 @@ export class SqliteKindyRepository implements KindyRepository {
       occurrenceRows,
       interactionRows,
       interactionPeopleRows,
+      syncOperationRows,
     ] = await Promise.all([
       db.query('SELECT * FROM people'),
       db.query('SELECT * FROM external_identities'),
@@ -104,6 +106,7 @@ export class SqliteKindyRepository implements KindyRepository {
       db.query('SELECT * FROM reminder_occurrences'),
       db.query('SELECT * FROM interactions'),
       db.query('SELECT * FROM interaction_people'),
+      db.query('SELECT * FROM sync_operations'),
     ])
 
     const contactPoints = rows(contactRows)
@@ -180,6 +183,20 @@ export class SqliteKindyRepository implements KindyRepository {
       etag: optionalString(row.etag),
       lastSyncedAt: optionalNumber(row.last_synced_at),
       remoteDeletedAt: optionalNumber(row.remote_deleted_at),
+      writtenFields:
+        row.written_fields_json == null
+          ? undefined
+          : (JSON.parse(String(row.written_fields_json)) as ExternalIdentity['writtenFields']),
+    }))
+
+    const syncQueue: SyncOperation[] = rows(syncOperationRows).map((row) => ({
+      id: String(row.id),
+      personId: String(row.person_id),
+      kind: String(row.kind) as SyncOperation['kind'],
+      state: String(row.state) as SyncOperation['state'],
+      attempts: Number(row.attempts),
+      lastError: optionalString(row.last_error),
+      updatedAt: Number(row.updated_at),
     }))
 
     const circles: Circle[] = rows(circleRows).map((row) => ({
@@ -291,6 +308,7 @@ export class SqliteKindyRepository implements KindyRepository {
       reminders,
       reminderOccurrences,
       interactions,
+      syncQueue,
     }
   }
 
@@ -300,6 +318,8 @@ export class SqliteKindyRepository implements KindyRepository {
     try {
       await db.execute(
         `DELETE FROM search_index;
+         DELETE FROM sync_operations;
+         DELETE FROM external_identities;
          DELETE FROM interaction_people;
          DELETE FROM interactions;
          DELETE FROM reminder_occurrences;
@@ -319,7 +339,7 @@ export class SqliteKindyRepository implements KindyRepository {
       for (const person of data.people) await this.writePerson(person)
       for (const identity of data.externalIdentities) {
         await db.run(
-          'INSERT INTO external_identities(id,person_id,provider,provider_account_id,provider_resource_id,etag,last_synced_at,remote_deleted_at) VALUES(?,?,?,?,?,?,?,?)',
+          'INSERT INTO external_identities(id,person_id,provider,provider_account_id,provider_resource_id,etag,last_synced_at,remote_deleted_at,written_fields_json) VALUES(?,?,?,?,?,?,?,?,?)',
           [
             identity.id,
             identity.personId,
@@ -329,6 +349,7 @@ export class SqliteKindyRepository implements KindyRepository {
             identity.etag ?? null,
             identity.lastSyncedAt ?? null,
             identity.remoteDeletedAt ?? null,
+            identity.writtenFields ? JSON.stringify(identity.writtenFields) : null,
           ],
           false,
         )
@@ -475,6 +496,21 @@ export class SqliteKindyRepository implements KindyRepository {
             occurrence.dueAt,
             occurrence.state,
             occurrence.snoozedUntil ?? null,
+          ],
+          false,
+        )
+      }
+      for (const operation of data.syncQueue) {
+        await db.run(
+          'INSERT INTO sync_operations(id,person_id,kind,state,attempts,last_error,updated_at) VALUES(?,?,?,?,?,?,?)',
+          [
+            operation.id,
+            operation.personId,
+            operation.kind,
+            operation.state,
+            operation.attempts,
+            operation.lastError ?? null,
+            operation.updatedAt,
           ],
           false,
         )

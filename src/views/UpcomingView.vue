@@ -22,10 +22,16 @@ const { t, locale } = useI18n()
 const selected = ref<Set<AgendaFilter>>(new Set())
 const showEarlier = ref(false)
 const showAdd = ref(false)
+const syncedPersonIds = computed(() =>
+  store.googleWriteBack
+    ? (store.data?.externalIdentities ?? []).map((identity) => identity.personId)
+    : [],
+)
 
 async function save(draft: AgendaDraft): Promise<void> {
   if (draft.kind === 'memo') await store.addMemo(draft)
   else if (draft.kind === 'birthday') await store.setBirthDate(draft.personId, draft.date)
+  else if (draft.kind === 'death') await store.markDeceased(draft.personId, draft.date)
   else await store.addWeddingAnniversary(draft.personIds, draft.date)
   showAdd.value = false
 }
@@ -127,6 +133,7 @@ const groups = computed(() => {
     <AddAgendaItemDialog
       :open="showAdd"
       :candidates="store.people"
+      :synced-person-ids="syncedPersonIds"
       @close="showAdd = false"
       @save="save"
     />

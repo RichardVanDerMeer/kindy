@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ArrowLeft, Cake, ChevronRight, Heart, NotebookPen } from '@lucide/vue'
+import {
+  ArrowLeft,
+  Cake,
+  ChevronRight,
+  CloudUpload,
+  Flower2,
+  Heart,
+  NotebookPen,
+} from '@lucide/vue'
 
 import type { PartialDate, Person } from '@/domain/model'
 
@@ -11,8 +19,14 @@ export type AgendaDraft =
   | { kind: 'memo'; personId: string; text: string; date: string }
   | { kind: 'birthday'; personId: string; date: PartialDate }
   | { kind: 'wedding'; personIds: string[]; date: PartialDate }
+  | { kind: 'death'; personId: string; date: PartialDate }
 
-const props = defineProps<{ open: boolean; candidates: Person[] }>()
+const props = defineProps<{
+  open: boolean
+  candidates: Person[]
+  /** People whose dates are also written to Google Contacts. */
+  syncedPersonIds: string[]
+}>()
 const emit = defineEmits<{ close: []; save: [draft: AgendaDraft] }>()
 
 type Kind = AgendaDraft['kind']
@@ -46,13 +60,28 @@ const options = [
   { kind: 'memo', icon: NotebookPen },
   { kind: 'birthday', icon: Cake },
   { kind: 'wedding', icon: Heart },
+  { kind: 'death', icon: Flower2 },
 ] as const
+
+/** Memos stay in Kindy; the dates are written to linked Google contacts. */
+const writesToGoogle = computed(
+  () =>
+    kind.value !== 'memo' &&
+    personIds.value.some((personId) => props.syncedPersonIds.includes(personId)),
+)
+
+const pickable = computed(() =>
+  kind.value === 'death'
+    ? props.candidates.filter((person) => !person.isDeceased && !person.isSelf)
+    : props.candidates,
+)
 
 const valid = computed(() => {
   switch (kind.value) {
     case 'memo':
       return personIds.value.length === 1 && Boolean(text.value.trim()) && Boolean(memoDate.value)
     case 'birthday':
+    case 'death':
       return personIds.value.length === 1 && Boolean(partialDate.value)
     case 'wedding':
       return personIds.value.length >= 1 && Boolean(partialDate.value)
@@ -70,6 +99,8 @@ function submit(): void {
     emit('save', { kind: 'birthday', personId, date: partialDate.value })
   } else if (kind.value === 'wedding' && partialDate.value) {
     emit('save', { kind: 'wedding', personIds: personIds.value, date: partialDate.value })
+  } else if (kind.value === 'death' && partialDate.value) {
+    emit('save', { kind: 'death', personId, date: partialDate.value })
   }
 }
 </script>
@@ -133,7 +164,11 @@ function submit(): void {
 
           <fieldset v-else class="field picker-field">
             <legend>
-              {{ kind === 'birthday' ? $t('agendaAdd.birthday.date') : $t('agendaAdd.date') }}
+              {{
+                kind === 'birthday' || kind === 'death'
+                  ? $t(`agendaAdd.${kind}.date`)
+                  : $t('agendaAdd.date')
+              }}
             </legend>
             <PartialDateInput v-model="partialDate" />
           </fieldset>
@@ -143,10 +178,13 @@ function submit(): void {
           </p>
           <PersonPicker
             v-model="personIds"
-            :candidates="candidates"
+            :candidates="pickable"
             :max="kind === 'wedding' ? 2 : 1"
           />
 
+          <p v-if="writesToGoogle" class="sync-hint">
+            <CloudUpload :size="16" /> {{ $t('contactSync.willSave') }}
+          </p>
           <div class="dialog__actions">
             <button type="button" class="button button--ghost" @click="emit('close')">
               {{ $t('people.cancel') }}

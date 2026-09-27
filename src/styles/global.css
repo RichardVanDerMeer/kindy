@@ -2534,3 +2534,111 @@ button.section-link {
   margin: 8px 2px;
   background: var(--color-border);
 }
+
+/* Google Contacts sync */
+
+.sync-badge {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: #f2eef7;
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sync-badge--synced {
+  background: #e0f4e9;
+  color: #267453;
+}
+
+.sync-badge--pending {
+  background: #fff4d6;
+  color: #86620c;
+}
+
+.sync-badge--failed {
+  background: #fbe4e8;
+  color: var(--color-danger);
+}
+
+.sync-badge--local {
+  box-shadow: inset 0 0 0 1px rgba(124, 77, 255, 0.35);
+  background: transparent;
+  color: var(--color-primary-strong);
+}
+
+.card-heading-row--wrap {
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.card-heading-row--wrap h2 {
+  margin: 0;
+}
+
+.sync-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 var(--space-3);
+  color: #267453;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.check-field {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  font-weight: 600;
+}
+
+.check-field input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-primary);
+}
+
+.choice-row--create strong {
+  color: var(--color-primary-strong);
+}
+
+.inline-form-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-subrow {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.settings-subrow__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-subrow__copy small {
+  color: var(--color-text-muted);
+  font-size: 0.84rem;
+}
+
+.settings-card__footer--sync .section-link {
+  margin-left: auto;
+}

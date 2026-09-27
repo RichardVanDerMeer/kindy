@@ -1,5 +1,8 @@
+import type { ContactUpdate, RemoteContactFields } from './contactSync'
 import type {
   Circle,
+  ContactDate,
+  ContactEvent,
   ImportantEvent,
   Interaction,
   KindyData,
@@ -62,9 +65,27 @@ export interface KindyRepository
 export interface ExternalContactsGateway {
   getConnection(): Promise<ExternalContactsConnection | null>
   authorize(): Promise<ExternalContactsConnection>
+  /** Reconnects without showing any Google UI; null when consent is needed first. */
+  restore(): Promise<ExternalContactsConnection | null>
   listCandidates(pageToken?: string): Promise<ExternalContactsPage>
   fetchChanges(syncToken: string): Promise<ExternalContactsChangeSet>
+  getContactFields(resourceName: string): Promise<{ etag: string } & RemoteContactFields>
+  updateContactFields(
+    resourceName: string,
+    etag: string,
+    update: ContactUpdate,
+  ): Promise<{ etag: string }>
+  createContact(input: NewExternalContact): Promise<{ resourceName: string; etag: string }>
   revoke(): Promise<void>
+}
+
+export interface NewExternalContact {
+  givenName: string
+  familyName?: string
+  birthday: ContactDate | null
+  events: ContactEvent[]
+  phones: string[]
+  emails: string[]
 }
 
 export interface ExternalContactsConnection {

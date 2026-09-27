@@ -2,6 +2,7 @@
 import {
   Apple,
   ArrowLeft,
+  CloudUpload,
   ContactRound,
   FileSpreadsheet,
   Languages,
@@ -102,6 +103,35 @@ async function toggleLock(): Promise<void> {
         <li>{{ $t('settings.googleChoose') }}</li>
         <li>{{ $t('settings.googleLocalCopy') }}</li>
       </ul>
+      <div class="settings-subrow">
+        <span class="settings-subrow__copy">
+          <strong>{{ $t('settings.writeBack') }}</strong>
+          <small>{{ $t('settings.writeBackHint') }}</small>
+        </span>
+        <button
+          class="switch"
+          role="switch"
+          :aria-checked="store.googleWriteBack"
+          :aria-label="$t('settings.writeBack')"
+          @click="store.setGoogleWriteBack(!store.googleWriteBack)"
+        >
+          <span />
+        </button>
+      </div>
+      <div v-if="store.googleLinked" class="settings-card__footer settings-card__footer--sync">
+        <CloudUpload :size="17" />
+        <span>{{
+          $t('settings.pendingCount', { count: store.pendingSyncCount }, store.pendingSyncCount)
+        }}</span>
+        <button
+          v-if="store.pendingSyncCount"
+          class="section-link"
+          :disabled="store.googleSyncing"
+          @click="store.retryContactSync()"
+        >
+          {{ $t('settings.syncNow') }}
+        </button>
+      </div>
       <button
         class="button button--ghost settings-wide-button"
         @click="router.push({ path: '/people', query: { import: 'google' } })"

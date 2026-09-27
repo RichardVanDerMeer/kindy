@@ -56,6 +56,39 @@ export interface ExternalIdentity {
   etag?: string
   lastSyncedAt?: number
   remoteDeletedAt?: number
+  /** What Kindy last wrote to this contact, so a later write replaces only its own values. */
+  writtenFields?: WrittenContactFields
+}
+
+export interface ContactDate {
+  year?: number
+  month: number
+  day: number
+}
+
+export interface ContactEvent {
+  /** Google's event type: "anniversary", "other" or a custom label such as "Overleden". */
+  type: string
+  date: ContactDate
+}
+
+export interface WrittenContactFields {
+  birthday: ContactDate | null
+  events: ContactEvent[]
+}
+
+/**
+ * A pending change for the linked address book. Operations are coalesced per
+ * person: the current Kindy values are read when the operation runs.
+ */
+export interface SyncOperation {
+  id: EntityId
+  personId: EntityId
+  kind: 'create' | 'update'
+  state: 'pending' | 'failed'
+  attempts: number
+  lastError?: string
+  updatedAt: number
 }
 
 export interface Circle {
@@ -206,6 +239,7 @@ export interface KindyData {
   reminders: Reminder[]
   reminderOccurrences: ReminderOccurrence[]
   interactions: Interaction[]
+  syncQueue: SyncOperation[]
 }
 
 export interface UpcomingItem {

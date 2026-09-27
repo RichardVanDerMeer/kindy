@@ -35,6 +35,11 @@ class KindyGoogleContactsPlugin : Plugin() {
         Identity.getAuthorizationClient(activity)
             .authorize(builder.build())
             .addOnSuccessListener { result ->
+                if (result.hasResolution() && call.getBoolean("interactive", true) != true) {
+                    // Background sync must never open Google's consent screen.
+                    call.reject("Google consent is required", "CONSENT_REQUIRED")
+                    return@addOnSuccessListener
+                }
                 if (result.hasResolution()) {
                     val pendingIntent = result.pendingIntent
                     if (pendingIntent == null) {
@@ -122,6 +127,65 @@ class KindyGoogleContactsPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun getContact(call: PluginCall) {
+        val token = requireToken(call) ?: return
+        val resourceName = requireResourceName(call) ?: return
+        execute {
+            try {
+                val uri = Uri.parse("$PEOPLE_API_URL/$resourceName").buildUpon()
+                    .appendQueryParameter("personFields", WRITABLE_FIELDS)
+                    .build()
+                resolveJson(call, send("GET", uri.toString(), token, null))
+            } catch (error: Exception) {
+                call.reject("Unable to read the Google contact", error)
+            }
+        }
+    }
+
+    @PluginMethod
+    fun updateContact(call: PluginCall) {
+        val token = requireToken(call) ?: return
+        val resourceName = requireResourceName(call) ?: return
+        val person = call.getObject("person")
+        val fields = call.getString("updatePersonFields")
+        if (person == null || fields.isNullOrBlank()) {
+            call.reject("A person and updatePersonFields are required")
+            return
+        }
+        execute {
+            try {
+                val uri = Uri.parse("$PEOPLE_API_URL/$resourceName:updateContact").buildUpon()
+                    .appendQueryParameter("updatePersonFields", fields)
+                    .appendQueryParameter("personFields", WRITABLE_FIELDS)
+                    .build()
+                resolveJson(call, send("PATCH", uri.toString(), token, person.toString()))
+            } catch (error: Exception) {
+                call.reject("Unable to update the Google contact", error)
+            }
+        }
+    }
+
+    @PluginMethod
+    fun createContact(call: PluginCall) {
+        val token = requireToken(call) ?: return
+        val person = call.getObject("person")
+        if (person == null) {
+            call.reject("A person is required")
+            return
+        }
+        execute {
+            try {
+                val uri = Uri.parse("$PEOPLE_API_URL/people:createContact").buildUpon()
+                    .appendQueryParameter("personFields", WRITABLE_FIELDS)
+                    .build()
+                resolveJson(call, send("POST", uri.toString(), token, person.toString()))
+            } catch (error: Exception) {
+                call.reject("Unable to create the Google contact", error)
+            }
+        }
+    }
+
+    @PluginMethod
     fun revoke(call: PluginCall) {
         val selectedAccount = account
         if (selectedAccount == null) {
@@ -163,20 +227,56 @@ class KindyGoogleContactsPlugin : Plugin() {
     }
 
     private fun requestedScopes(): List<Scope> = listOf(
-        Scope(CONTACTS_READONLY_SCOPE),
+        Scope(CONTACTS_SCOPE),
         Scope("openid"),
         Scope("profile"),
         Scope("email"),
     )
 
-    private fun get(url: String, token: String): HttpResponse {
+    private fun requireToken(call: PluginCall): String? {
+        val token = accessToken
+        if (token == null) call.reject("Google Contacts is not authorized", "NOT_AUTHORIZED")
+        return token
+    }
+
+    private fun requireResourceName(call: PluginCall): String? {
+        val resourceName = call.getString("resourceName")
+        if (resourceName == null || !resourceName.matches(RESOURCE_NAME_PATTERN)) {
+            call.reject("A valid contact resource name is required")
+            return null
+        }
+        return resourceName
+    }
+
+    private fun resolveJson(call: PluginCall, response: HttpResponse) {
+        if (response.status in 200..299) {
+            call.resolve(JSObject(response.body))
+        } else {
+            // Only the status is passed on; response bodies may contain contact details.
+            call.reject("Google Contacts returned HTTP ${response.status}", response.status.toString())
+        }
+    }
+
+    private fun get(url: String, token: String): HttpResponse = send("GET", url, token, null)
+
+    /**
+     * HttpURLConnection has no PATCH, so PATCH is sent as POST with Google's
+     * documented X-HTTP-Method-Override header.
+     */
+    private fun send(method: String, url: String, token: String, body: String?): HttpResponse {
         val connection = URL(url).openConnection() as HttpURLConnection
         return try {
-            connection.requestMethod = "GET"
+            connection.requestMethod = if (method == "PATCH") "POST" else method
+            if (method == "PATCH") connection.setRequestProperty("X-HTTP-Method-Override", "PATCH")
             connection.connectTimeout = 15_000
             connection.readTimeout = 20_000
             connection.setRequestProperty("Authorization", "Bearer $token")
             connection.setRequestProperty("Accept", "application/json")
+            if (body != null) {
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            }
             val status = connection.responseCode
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
             HttpResponse(status, stream?.bufferedReader()?.use { it.readText() }.orEmpty())
@@ -189,7 +289,10 @@ class KindyGoogleContactsPlugin : Plugin() {
 }
 
 private const val AUTHORIZATION_REQUEST_CODE = 9412
-private const val CONTACTS_READONLY_SCOPE = "https://www.googleapis.com/auth/contacts.readonly"
+private const val CONTACTS_SCOPE = "https://www.googleapis.com/auth/contacts"
+private const val PEOPLE_API_URL = "https://people.googleapis.com/v1"
+private const val WRITABLE_FIELDS = "names,birthdays,events,metadata"
+private val RESOURCE_NAME_PATTERN = Regex("^people/[A-Za-z0-9_-]+$")
 private const val PEOPLE_CONNECTIONS_URL = "https://people.googleapis.com/v1/people/me/connections"
 private const val PERSON_FIELDS =
     "names,nicknames,emailAddresses,phoneNumbers,addresses,birthdays,organizations,photos,memberships,metadata,urls"

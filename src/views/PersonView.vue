@@ -23,9 +23,10 @@ import {
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
-import AddConnectionDialog from '@/components/AddConnectionDialog.vue'
+import AddConnectionDialog, { type NewPersonInput } from '@/components/AddConnectionDialog.vue'
 import AddNoteDialog from '@/components/AddNoteDialog.vue'
 import CirclePickerDialog from '@/components/CirclePickerDialog.vue'
+import ContactSyncBadge from '@/components/ContactSyncBadge.vue'
 import PersonAvatar from '@/components/PersonAvatar.vue'
 import RelationshipDiagram from '@/components/RelationshipDiagram.vue'
 import { calendarDay } from '@/domain/agenda'
@@ -226,9 +227,16 @@ function openAddConnection(): void {
   showAddConnection.value = true
 }
 
-async function addConnection(input: { personId: string; role: RelationshipRole }): Promise<void> {
+async function addConnection(
+  input:
+    | { personId: string; role: RelationshipRole }
+    | { newPerson: NewPersonInput; role: RelationshipRole },
+): Promise<void> {
   try {
-    await store.addConnection(props.id, input.personId, input.role)
+    // A new connection is always a real person: create them first, then link.
+    const personId =
+      'personId' in input ? input.personId : (await store.addPerson(input.newPerson)).id
+    await store.addConnection(props.id, personId, input.role)
     showAddConnection.value = false
   } catch {
     connectionError.value = t('connections.exists')
@@ -346,7 +354,10 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
       </article>
 
       <article class="card profile-card">
-        <h2>{{ $t('profile.details') }}</h2>
+        <div class="card-heading-row card-heading-row--wrap">
+          <h2>{{ $t('profile.details') }}</h2>
+          <ContactSyncBadge :person-id="person.id" />
+        </div>
         <p v-if="!hasDetails" class="muted">{{ $t('profile.noDetails') }}</p>
 
         <div v-if="person.birthDate && !person.isDeceased" class="detail-row">
@@ -595,6 +606,7 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
       :open="showAddConnection"
       :subject="person"
       :candidates="store.people"
+      :google-available="store.googleLinked"
       :error="connectionError"
       @close="showAddConnection = false"
       @save="addConnection"

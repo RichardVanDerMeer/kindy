@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Check, Search } from '@lucide/vue'
+import { Check, Search, UserRoundPlus } from '@lucide/vue'
 
 import { normalizeText } from '@/domain/duplicates'
 import type { Person } from '@/domain/model'
@@ -11,7 +11,8 @@ import PersonAvatar from './PersonAvatar.vue'
  * Searchable list to pick people. With `max` 1 it behaves like a radio group;
  * otherwise it toggles up to `max` people (unlimited when omitted).
  */
-const props = defineProps<{ candidates: Person[]; max?: number }>()
+const props = defineProps<{ candidates: Person[]; max?: number; allowCreate?: boolean }>()
+const emit = defineEmits<{ create: [name: string] }>()
 const selected = defineModel<string[]>({ required: true })
 const query = ref('')
 
@@ -21,6 +22,16 @@ const filtered = computed(() => {
   return props.candidates.filter(
     (person) => !normalized || normalizeText(person.displayName).includes(normalized),
   )
+})
+
+/** Offer a new person when the typed name is not an existing one. */
+const createName = computed(() => {
+  const name = query.value.trim()
+  if (!props.allowCreate || !name) return ''
+  const exact = props.candidates.some(
+    (person) => normalizeText(person.displayName) === normalizeText(name),
+  )
+  return exact ? '' : name
 })
 
 function toggle(personId: string): void {
@@ -44,6 +55,15 @@ function toggle(personId: string): void {
       <input v-model="query" type="search" :placeholder="$t('connections.searchPerson')" />
     </label>
     <div class="choice-list choice-list--people" :role="single ? 'radiogroup' : 'group'">
+      <button
+        v-if="createName"
+        type="button"
+        class="choice-row choice-row--create"
+        @click="emit('create', createName)"
+      >
+        <span class="choice-row__icon surface--primary"><UserRoundPlus :size="18" /></span>
+        <strong>{{ $t('connections.newPerson', { name: createName }) }}</strong>
+      </button>
       <button
         v-for="person in filtered"
         :key="person.id"

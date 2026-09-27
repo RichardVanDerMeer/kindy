@@ -66,7 +66,7 @@ function connection(
 }
 
 export const demoData: KindyData = {
-  schemaVersion: 4,
+  schemaVersion: 5,
   people: [
     person('demo-richard', 'Richard van der Meer', {
       isSelf: true,
@@ -158,7 +158,15 @@ export const demoData: KindyData = {
     }),
     person('demo-pieter', 'Pieter Hendriks'),
   ],
-  externalIdentities: [],
+  // Linked to the browser's simulated Google account, so write-back can be tried.
+  externalIdentities: ['sophie', 'els', 'robin', 'daan', 'sanne', 'anouk'].map((name) => ({
+    id: `identity-${name}`,
+    personId: `demo-${name}`,
+    provider: 'google' as const,
+    providerAccountId: 'preview-account',
+    providerResourceId: `people/preview-${name}`,
+    lastSyncedAt: now - DAY,
+  })),
   circles: [
     {
       id: 'circle-family',
@@ -320,4 +328,5 @@ export const demoData: KindyData = {
     { id: 'occurrence-els', reminderId: 'reminder-els', dueAt: at(-1, 11), state: 'scheduled' },
   ],
   interactions: [],
+  syncQueue: [],
 }

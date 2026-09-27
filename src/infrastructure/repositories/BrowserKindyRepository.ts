@@ -5,7 +5,7 @@ import type { KindyRepository } from '@/domain/ports'
 import { demoData } from '@/fixtures/demo'
 
 const STORAGE_KEY = 'kindy.local-data.v3'
-const SCHEMA_VERSION = 4
+const SCHEMA_VERSION = 5
 
 function emptyData(): KindyData {
   return {
@@ -20,6 +20,7 @@ function emptyData(): KindyData {
     reminders: [],
     reminderOccurrences: [],
     interactions: [],
+    syncQueue: [],
   }
 }
 
@@ -40,6 +41,7 @@ export class BrowserKindyRepository implements KindyRepository {
         this.data = clone(demoData)
       } else if (this.data.schemaVersion < SCHEMA_VERSION) {
         for (const circle of this.data.circles) circle.isFavorite ??= false
+        this.data.syncQueue ??= []
         this.data.schemaVersion = SCHEMA_VERSION
       }
       await this.persist()

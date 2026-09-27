@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue'
 
-const props = defineProps<{ open: boolean }>()
+const props = defineProps<{ open: boolean; googleAvailable: boolean }>()
 const emit = defineEmits<{
   close: []
   google: []
-  save: [input: { givenName: string; familyName?: string }]
+  save: [input: { givenName: string; familyName?: string; saveToGoogle: boolean }]
 }>()
 
 const givenName = ref('')
 const familyName = ref('')
+const saveToGoogle = ref(false)
 const nameInput = ref<HTMLInputElement>()
 
 watch(
@@ -18,6 +19,7 @@ watch(
     if (!isOpen) return
     givenName.value = ''
     familyName.value = ''
+    saveToGoogle.value = props.googleAvailable
     await nextTick()
     nameInput.value?.focus()
   },
@@ -25,7 +27,11 @@ watch(
 
 function submit(): void {
   if (!givenName.value.trim()) return
-  emit('save', { givenName: givenName.value, familyName: familyName.value })
+  emit('save', {
+    givenName: givenName.value,
+    familyName: familyName.value,
+    saveToGoogle: saveToGoogle.value,
+  })
 }
 </script>
 
@@ -55,6 +61,10 @@ function submit(): void {
             <input v-model="familyName" autocomplete="family-name" />
           </label>
         </div>
+        <label v-if="googleAvailable" class="check-field">
+          <input v-model="saveToGoogle" type="checkbox" />
+          <span>{{ $t('contactSync.saveToGoogle') }}</span>
+        </label>
         <div class="dialog__actions">
           <button type="button" class="button button--ghost" @click="$emit('close')">
             {{ $t('people.cancel') }}

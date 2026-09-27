@@ -3,11 +3,26 @@ import { defineStore } from 'pinia'
 
 import { buildAgenda, calendarDay } from '@/domain/agenda'
 import { createConnection } from '@/domain/connections'
+import { enqueueSync } from '@/domain/contactSync'
 import type { Circle, KindyData, PartialDate, Person, RelationshipRole } from '@/domain/model'
 import type { ExternalContactsConnection, ExternalContactSnapshot } from '@/domain/ports'
+import { getGoogleContactsGateway } from '@/infrastructure/contacts/googleContactsGateway'
 import { getKindyRepository } from '@/infrastructure/repositories/repository'
+import { runContactSync } from '@/infrastructure/sync/contactSyncRunner'
+import { i18n } from '@/locales'
 
 const repository = getKindyRepository()
+const WRITE_BACK_KEY = 'kindy.google.writeBack'
+
+function readWriteBack(): boolean {
+  try {
+    return localStorage.getItem(WRITE_BACK_KEY) !== 'off'
+  } catch {
+    return true
+  }
+}
+
+export type ContactSyncStatus = 'local' | 'synced' | 'pending' | 'failed'
 
 export const useKindyStore = defineStore('kindy', () => {
   const initialized = ref(false)
@@ -15,6 +30,8 @@ export const useKindyStore = defineStore('kindy', () => {
   const error = ref<string | null>(null)
   const data = ref<KindyData | null>(null)
   const today = ref(calendarDay(new Date()))
+  const googleWriteBack = ref(readWriteBack())
+  const googleSyncing = ref(false)
 
   const people = computed(() =>
     (data.value?.people ?? [])
@@ -29,6 +46,11 @@ export const useKindyStore = defineStore('kindy', () => {
     people.value.filter((person) => person.isFavorite && !person.isSelf),
   )
   const favoriteCircles = computed(() => circles.value.filter((circle) => circle.isFavorite))
+  /** True once any person is linked to Google, i.e. an account has been connected. */
+  const googleLinked = computed(() =>
+    (data.value?.externalIdentities ?? []).some((identity) => identity.provider === 'google'),
+  )
+  const pendingSyncCount = computed(() => data.value?.syncQueue.length ?? 0)
   /** Everything from a week ago until a year ahead; views narrow it further. */
   const agenda = computed(() =>
     data.value ? buildAgenda(data.value, today.value, { daysBack: 7, daysAhead: 365 }) : [],
@@ -42,6 +64,8 @@ export const useKindyStore = defineStore('kindy', () => {
       await repository.initialize()
       await refresh()
       initialized.value = true
+      window.addEventListener('online', () => void syncGoogle())
+      void syncGoogle()
     } catch (caught) {
       error.value = caught instanceof Error ? caught.message : String(caught)
     } finally {
@@ -57,15 +81,99 @@ export const useKindyStore = defineStore('kindy', () => {
   /**
    * Applies a change to a plain snapshot and stores it. This rewrites the full
    * dataset, which is fine for the current demo phase; targeted repository
-   * writes should replace it before larger datasets.
+   * writes should replace it before larger datasets. Callers pass values from
+   * reactive form state, so actions copy them: Vue proxies cannot be
+   * structured-cloned into storage.
    */
-  // Callers pass values from reactive form state; copy them (as the actions below do)
-  // because Vue proxies cannot be structured-cloned into storage.
   async function mutate(change: (draft: KindyData) => void): Promise<void> {
     const next = await repository.getData()
     change(next)
     await repository.replaceData(next)
     await refresh()
+  }
+
+  function isLinked(draft: KindyData, personId: string): boolean {
+    return draft.externalIdentities.some(
+      (identity) =>
+        identity.personId === personId &&
+        identity.provider === 'google' &&
+        !identity.remoteDeletedAt,
+    )
+  }
+
+  /** Queues the managed fields of linked people for Google, when write-back is on. */
+  function queueContactUpdates(draft: KindyData, personIds: string[]): void {
+    if (!googleWriteBack.value) return
+    for (const personId of personIds) {
+      if (!isLinked(draft, personId)) continue
+      draft.syncQueue = enqueueSync(draft.syncQueue, personId, 'update', Date.now(), () =>
+        crypto.randomUUID(),
+      )
+    }
+  }
+
+  function queueContactCreate(draft: KindyData, personId: string): void {
+    if (isLinked(draft, personId)) return
+    draft.syncQueue = enqueueSync(draft.syncQueue, personId, 'create', Date.now(), () =>
+      crypto.randomUUID(),
+    )
+  }
+
+  async function syncGoogle(): Promise<void> {
+    if (googleSyncing.value || !initialized.value) return
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return
+    googleSyncing.value = true
+    try {
+      await runContactSync({
+        repository,
+        gateway: getGoogleContactsGateway(),
+        labels: { death: i18n.global.t('contactSync.deathEvent') },
+      })
+      await refresh()
+    } catch {
+      // The queue is kept; a later change or reconnect retries it.
+    } finally {
+      googleSyncing.value = false
+    }
+  }
+
+  function contactSyncStatus(personId: string): ContactSyncStatus {
+    const operation = data.value?.syncQueue.find((candidate) => candidate.personId === personId)
+    if (operation) return operation.state === 'failed' ? 'failed' : 'pending'
+    return data.value && isLinked(data.value, personId) ? 'synced' : 'local'
+  }
+
+  async function retryContactSync(personId?: string): Promise<void> {
+    await mutate((draft) => {
+      for (const operation of draft.syncQueue) {
+        if (!personId || operation.personId === personId) operation.state = 'pending'
+      }
+    })
+    await syncGoogle()
+  }
+
+  /** Explicitly copies a Kindy-only person to Google Contacts. */
+  async function saveToGoogle(personId: string): Promise<void> {
+    await mutate((draft) => queueContactCreate(draft, personId))
+    void syncGoogle()
+  }
+
+  async function setGoogleWriteBack(enabled: boolean): Promise<void> {
+    googleWriteBack.value = enabled
+    try {
+      localStorage.setItem(WRITE_BACK_KEY, enabled ? 'on' : 'off')
+    } catch {
+      // Applies for this session.
+    }
+    if (!enabled) return
+    // Changes made while write-back was off are sent now.
+    await mutate((draft) =>
+      queueContactUpdates(
+        draft,
+        draft.externalIdentities.map((identity) => identity.personId),
+      ),
+    )
+    void syncGoogle()
   }
 
   async function lock(): Promise<void> {
@@ -79,7 +187,11 @@ export const useKindyStore = defineStore('kindy', () => {
     await refresh()
   }
 
-  async function addPerson(input: { givenName: string; familyName?: string }): Promise<Person> {
+  async function addPerson(input: {
+    givenName: string
+    familyName?: string
+    saveToGoogle?: boolean
+  }): Promise<Person> {
     const now = Date.now()
     const givenName = input.givenName.trim()
     const familyName = input.familyName?.trim() || undefined
@@ -96,7 +208,11 @@ export const useKindyStore = defineStore('kindy', () => {
       createdAt: now,
       updatedAt: now,
     }
-    await savePerson(person)
+    await mutate((draft) => {
+      draft.people.push(person)
+      if (input.saveToGoogle) queueContactCreate(draft, person.id)
+    })
+    if (input.saveToGoogle) void syncGoogle()
     return person
   }
 
@@ -304,7 +420,21 @@ export const useKindyStore = defineStore('kindy', () => {
       if (!person) return
       person.birthDate = { ...birthDate }
       person.updatedAt = Date.now()
+      queueContactUpdates(draft, [personId])
     })
+    void syncGoogle()
+  }
+
+  async function markDeceased(personId: string, deathDate: PartialDate): Promise<void> {
+    await mutate((draft) => {
+      const person = draft.people.find((candidate) => candidate.id === personId)
+      if (!person) return
+      person.isDeceased = true
+      person.deathDate = { ...deathDate }
+      person.updatedAt = Date.now()
+      queueContactUpdates(draft, [personId])
+    })
+    void syncGoogle()
   }
 
   async function addWeddingAnniversary(personIds: string[], date: PartialDate): Promise<void> {
@@ -317,7 +447,9 @@ export const useKindyStore = defineStore('kindy', () => {
         personIds: [...personIds],
         source: 'kindy',
       })
+      queueContactUpdates(draft, personIds)
     })
+    void syncGoogle()
   }
 
   async function resetDemoData(): Promise<void> {
@@ -364,6 +496,10 @@ export const useKindyStore = defineStore('kindy', () => {
     favoritePeople,
     favoriteCircles,
     agenda,
+    googleWriteBack,
+    googleSyncing,
+    googleLinked,
+    pendingSyncCount,
     initialize,
     refresh,
     lock,
@@ -380,7 +516,13 @@ export const useKindyStore = defineStore('kindy', () => {
     addNote,
     addMemo,
     setBirthDate,
+    markDeceased,
     addWeddingAnniversary,
+    syncGoogle,
+    contactSyncStatus,
+    retryContactSync,
+    saveToGoogle,
+    setGoogleWriteBack,
     resetDemoData,
     importExternalContacts,
     search,

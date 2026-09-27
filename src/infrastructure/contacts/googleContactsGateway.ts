@@ -1,11 +1,14 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
 
+import type { ContactUpdate, RemoteContactFields } from '@/domain/contactSync'
+import type { ContactDate, ContactEvent } from '@/domain/model'
 import type {
   ExternalContactsChangeSet,
   ExternalContactsConnection,
   ExternalContactsGateway,
   ExternalContactsPage,
   ExternalContactSnapshot,
+  NewExternalContact,
 } from '@/domain/ports'
 
 interface GoogleContactsPlugin {
@@ -14,7 +17,46 @@ interface GoogleContactsPlugin {
     pageToken?: string
     syncToken?: string
   }): Promise<GoogleConnectionsResponse>
+  getContact(options: { resourceName: string }): Promise<GoogleWritablePerson>
+  updateContact(options: {
+    resourceName: string
+    updatePersonFields: string
+    person: GoogleWritablePerson
+  }): Promise<GoogleWritablePerson>
+  createContact(options: { person: GoogleWritablePerson }): Promise<GoogleWritablePerson>
   revoke(): Promise<void>
+}
+
+/** The subset of a People API person that Kindy reads back or writes. */
+interface GoogleWritablePerson {
+  resourceName?: string
+  etag?: string
+  names?: Array<{ givenName?: string; familyName?: string }>
+  birthdays?: Array<{ date?: ContactDate }>
+  events?: Array<{ type?: string; date?: ContactDate }>
+  phoneNumbers?: Array<{ value: string }>
+  emailAddresses?: Array<{ value: string }>
+}
+
+function remoteFields(person: GoogleWritablePerson): RemoteContactFields {
+  return {
+    birthdays: (person.birthdays ?? [])
+      .map((birthday) => birthday.date)
+      .filter((date): date is ContactDate => Boolean(date?.month && date.day)),
+    events: (person.events ?? [])
+      .filter((event): event is ContactEvent => Boolean(event.date?.month && event.date.day))
+      .map((event) => ({ type: event.type ?? 'other', date: event.date })),
+  }
+}
+
+function writablePerson(input: NewExternalContact): GoogleWritablePerson {
+  return {
+    names: [{ givenName: input.givenName, familyName: input.familyName }],
+    birthdays: input.birthday ? [{ date: input.birthday }] : undefined,
+    events: input.events.length ? input.events : undefined,
+    phoneNumbers: input.phones.length ? input.phones.map((value) => ({ value })) : undefined,
+    emailAddresses: input.emails.length ? input.emails.map((value) => ({ value })) : undefined,
+  }
 }
 
 interface GoogleConnectionsResponse {
@@ -119,6 +161,40 @@ class NativeGoogleContactsGateway implements ExternalContactsGateway {
     return this.connection
   }
 
+  async restore(): Promise<ExternalContactsConnection | null> {
+    if (this.connection) return this.connection
+    try {
+      this.connection = await nativePlugin.authorize({ interactive: false })
+      return this.connection
+    } catch {
+      // Consent is missing or the device is offline; writes stay queued.
+      return null
+    }
+  }
+
+  async getContactFields(resourceName: string) {
+    const person = await nativePlugin.getContact({ resourceName })
+    return { etag: person.etag ?? '', ...remoteFields(person) }
+  }
+
+  async updateContactFields(resourceName: string, etag: string, update: ContactUpdate) {
+    const person: GoogleWritablePerson = { etag }
+    if (update.birthdays) person.birthdays = update.birthdays.map((date) => ({ date }))
+    if (update.events) person.events = update.events
+    const result = await nativePlugin.updateContact({
+      resourceName,
+      updatePersonFields: update.updatePersonFields.join(','),
+      person,
+    })
+    return { etag: result.etag ?? '' }
+  }
+
+  async createContact(input: NewExternalContact) {
+    const result = await nativePlugin.createContact({ person: writablePerson(input) })
+    if (!result.resourceName) throw new Error('Google did not return the new contact')
+    return { resourceName: result.resourceName, etag: result.etag ?? '' }
+  }
+
   async listCandidates(pageToken?: string): Promise<ExternalContactsPage> {
     const response = await nativePlugin.listConnections({ pageToken })
     return {
@@ -201,6 +277,41 @@ const previewContacts: ExternalContactSnapshot[] = [
   },
 ]
 
+const PREVIEW_STORE_KEY = 'kindy.preview-google-contacts'
+const previewConnection: ExternalContactsConnection = {
+  provider: 'google',
+  providerAccountId: 'preview-account',
+  displayName: 'Google-preview',
+}
+
+type PreviewStore = Record<string, GoogleWritablePerson>
+
+function readPreviewStore(): PreviewStore {
+  try {
+    return JSON.parse(localStorage.getItem(PREVIEW_STORE_KEY) ?? '{}') as PreviewStore
+  } catch {
+    return {}
+  }
+}
+
+function writePreviewStore(store: PreviewStore): void {
+  try {
+    localStorage.setItem(PREVIEW_STORE_KEY, JSON.stringify(store))
+  } catch {
+    // The preview address book is best effort only.
+  }
+}
+
+/** Mimics network latency so the "waiting for Google" state is visible. */
+function previewDelay(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 600))
+}
+
+/**
+ * Browser stand-in for Google Contacts. It behaves as an already linked
+ * account and keeps written contacts in local storage, so the write-back flow
+ * can be tried without a device.
+ */
 class PreviewGoogleContactsGateway implements ExternalContactsGateway {
   private connection: ExternalContactsConnection | null = null
 
@@ -209,12 +320,42 @@ class PreviewGoogleContactsGateway implements ExternalContactsGateway {
   }
 
   async authorize(): Promise<ExternalContactsConnection> {
-    this.connection = {
-      provider: 'google',
-      providerAccountId: 'preview-account',
-      displayName: 'Google-preview',
-    }
+    this.connection = previewConnection
     return this.connection
+  }
+
+  async restore(): Promise<ExternalContactsConnection | null> {
+    this.connection = previewConnection
+    return this.connection
+  }
+
+  async getContactFields(resourceName: string) {
+    await previewDelay()
+    const person = readPreviewStore()[resourceName] ?? { etag: 'preview-0' }
+    return { etag: person.etag ?? 'preview-0', ...remoteFields(person) }
+  }
+
+  async updateContactFields(resourceName: string, etag: string, update: ContactUpdate) {
+    await previewDelay()
+    const store = readPreviewStore()
+    const person = store[resourceName] ?? {}
+    if ((person.etag ?? 'preview-0') !== etag) throw new Error('The contact changed in Google')
+    if (update.birthdays) person.birthdays = update.birthdays.map((date) => ({ date }))
+    if (update.events) person.events = update.events
+    person.etag = `preview-${Date.now()}`
+    store[resourceName] = person
+    writePreviewStore(store)
+    return { etag: person.etag }
+  }
+
+  async createContact(input: NewExternalContact) {
+    await previewDelay()
+    const store = readPreviewStore()
+    const resourceName = `people/preview-${crypto.randomUUID()}`
+    const person = { ...writablePerson(input), resourceName, etag: `preview-${Date.now()}` }
+    store[resourceName] = person
+    writePreviewStore(store)
+    return { resourceName, etag: person.etag }
   }
 
   async listCandidates(): Promise<ExternalContactsPage> {

@@ -60,7 +60,11 @@ function personSubtitle(person: Person): string {
     .join(' · ')
 }
 
-async function addPerson(input: { givenName: string; familyName?: string }): Promise<void> {
+async function addPerson(input: {
+  givenName: string
+  familyName?: string
+  saveToGoogle: boolean
+}): Promise<void> {
   const person = await store.addPerson(input)
   showAddPerson.value = false
   await router.push({ name: 'person', params: { id: person.id } })
@@ -153,6 +157,7 @@ async function importGoogleContacts(
     </button>
     <AddPersonDialog
       :open="showAddPerson"
+      :google-available="store.googleLinked"
       @close="showAddPerson = false"
       @google="chooseGoogle"
       @save="addPerson"

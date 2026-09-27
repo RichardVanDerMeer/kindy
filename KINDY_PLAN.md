@@ -60,7 +60,7 @@ The first usable version includes:
 - Automatic ingestion of WhatsApp, Signal or phone-call contents.
 - AI-generated relationship scores.
 - Automatic social-media enrichment.
-- Full two-way writing to Google Contacts.
+- Full two-way synchronization with Google Contacts. Kindy does write birthdays, wedding days, dates of death and new people back to Google; see [ADR 0001](docs/adr/0001-write-back-to-google-contacts.md).
 - Multi-device cloud synchronization.
 - iOS widgets.
 
@@ -316,7 +316,7 @@ Record enough information to audit and, where reasonably possible, undo a merge:
 
 ## 6. Google Contacts integration
 
-Use the Google People API and request the smallest viable OAuth scopes. The initial integration is import/read-only from Google's perspective.
+Use the Google People API and request the smallest viable OAuth scopes. Kindy imports contacts and writes a small, fixed set of fields back to linked contacts (birthday, wedding day and anniversaries, date of death) and can create new contacts on request. Relationships and circles stay in Kindy. See [ADR 0001](docs/adr/0001-write-back-to-google-contacts.md).
 
 Import these fields where available:
 

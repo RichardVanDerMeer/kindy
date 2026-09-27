@@ -23,7 +23,7 @@ function person(id: string, overrides: Partial<Person> = {}): Person {
 
 function data(overrides: Partial<KindyData>): KindyData {
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     people: [],
     externalIdentities: [],
     circles: [],
@@ -34,6 +34,7 @@ function data(overrides: Partial<KindyData>): KindyData {
     reminders: [],
     reminderOccurrences: [],
     interactions: [],
+    syncQueue: [],
     ...overrides,
   }
 }
