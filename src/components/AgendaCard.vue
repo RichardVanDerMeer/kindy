@@ -7,7 +7,6 @@ import {
   CalendarClock,
   CalendarHeart,
   Check,
-  Flower2,
   Gift,
   Heart,
   Mail,
@@ -18,8 +17,14 @@ import {
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
-import { describeAgendaItem, firstName, primaryPerson, yearsText } from '@/composables/agendaText'
-import type { AgendaItem } from '@/domain/agenda'
+import {
+  agendaCardText,
+  describeAgendaItem,
+  firstName,
+  primaryPerson,
+  yearsText,
+} from '@/composables/agendaText'
+import { agendaFilterFor, type AgendaItem } from '@/domain/agenda'
 import type { Person } from '@/domain/model'
 import { useEditorsStore } from '@/stores/editors'
 import { useKindyStore } from '@/stores/kindy'
@@ -62,19 +67,17 @@ const openWishes = computed(() =>
     ? store.wishesFor(primary.value.id).filter((wish) => wish.status !== 'given').length
     : 0,
 )
-const text = computed(() => describeAgendaItem(props.item, people.value, t, locale.value))
-const title = computed(() => text.value.title)
-const detail = computed(() => text.value.detail)
+const text = computed(() => agendaCardText(props.item, people.value, t, locale.value))
+/** The full sentence, e.g. "Wordt 12", for screen readers on the circle. */
+const detail = computed(() => describeAgendaItem(props.item, people.value, t, locale.value).detail)
 
 const date = computed(() => new Date(`${props.item.date}T12:00:00`))
-const relativeDay = computed(() => {
+/** Above the day number: today, tomorrow, or the short weekday. */
+const dayLabel = computed(() => {
   const days = props.item.daysFromToday
   if (days === 0) return t('upcoming.today')
   if (days === 1) return t('upcoming.tomorrow')
-  if (days === -1) return t('upcoming.yesterday')
-  if (days < 0) return t('upcoming.daysAgo', { count: -days })
-  if (days < 7) return new Intl.DateTimeFormat(locale.value, { weekday: 'long' }).format(date.value)
-  return t('upcoming.inDays', { count: days })
+  return new Intl.DateTimeFormat(locale.value, { weekday: 'short' }).format(date.value)
 })
 
 const icon = computed(() => {
@@ -86,9 +89,6 @@ const icon = computed(() => {
       return Heart
     case 'work-anniversary':
       return BriefcaseBusiness
-    case 'memorial-birth':
-    case 'memorial-death':
-      return Flower2
     case 'reminder':
       return Bell
     case 'appointment':
@@ -109,13 +109,6 @@ const milestone = computed(() => {
   if (kind === 'work-anniversary') return 'work'
   return undefined
 })
-/** Next to the circle the detail line only adds what the circle doesn't say. */
-const shownDetail = computed(() => {
-  if (!milestone.value) return detail.value
-  return props.item.kind === 'work-anniversary' && props.item.title
-    ? t('upcoming.details.atEmployer', { title: props.item.title })
-    : ''
-})
 /** Today's celebrations get a festive card; a day of remembrance a quiet one. */
 const mood = computed(() => {
   if (props.item.daysFromToday !== 0) return undefined
@@ -128,9 +121,15 @@ function contact(kind: 'phone' | 'email'): string | undefined {
   return (points.find((point) => point.isPrimary) ?? points[0])?.value
 }
 
-const phone = computed(() => (primary.value?.isDeceased ? undefined : contact('phone')))
-const email = computed(() => (primary.value?.isDeceased ? undefined : contact('email')))
+/** Call and message buttons only for this week (and just past); later cards stay calm. */
+const reachable = computed(() => props.item.daysFromToday <= 7 && !primary.value?.isDeceased)
+const phone = computed(() => (reachable.value ? contact('phone') : undefined))
+const email = computed(() => (reachable.value ? contact('email') : undefined))
 const whatsappNumber = computed(() => phone.value?.replace(/[^\d]/g, ''))
+/** Without other buttons the gift sits next to the circle, and the card stays one row high. */
+const hasContactActions = computed(() => Boolean(phone.value || email.value || editable.value))
+const giftInRow = computed(() => !props.compact && openWishes.value > 0 && !hasContactActions.value)
+const hasActionRow = computed(() => !props.compact && hasContactActions.value)
 
 function open(): void {
   if (primary.value) void router.push(`/people/${primary.value.id}`)
@@ -151,7 +150,12 @@ function open(): void {
   >
     <div class="agenda-card__row">
       <button class="agenda-card__main" :disabled="!primary" @click="open">
-        <span class="agenda-date" :aria-label="date.toLocaleDateString(locale)">
+        <span
+          class="agenda-date"
+          :class="{ 'agenda-date--today': item.daysFromToday === 0 }"
+          :aria-label="date.toLocaleDateString(locale, { dateStyle: 'full' })"
+        >
+          <small>{{ dayLabel }}</small>
           <strong>{{ new Intl.DateTimeFormat(locale, { day: 'numeric' }).format(date) }}</strong>
           <span>{{ new Intl.DateTimeFormat(locale, { month: 'short' }).format(date) }}</span>
         </span>
@@ -173,30 +177,40 @@ function open(): void {
             :deceased="primary.isDeceased"
             size="small"
           />
-          <span class="agenda-card__badge" aria-hidden="true">
-            <component :is="icon" :size="13" />
+          <span
+            v-if="!isMemorial"
+            class="agenda-card__badge"
+            :class="`agenda-card__badge--${agendaFilterFor(item.kind)}`"
+            aria-hidden="true"
+          >
+            <component :is="icon" :size="16" />
           </span>
         </span>
         <span class="agenda-card__copy">
-          <span class="agenda-card__when">
-            <span v-if="item.daysFromToday === 0" class="today-pill">{{ relativeDay }}</span>
-            <template v-else>{{ relativeDay }}</template>
-          </span>
-          <strong>{{ title }}</strong>
+          <strong>{{ text.headline }}</strong>
           <small v-if="item.done" class="agenda-card__done">{{ t('upcoming.doneLabel') }}</small>
-          <small v-else-if="shownDetail">{{ shownDetail }}</small>
-        </span>
-        <span
-          v-if="milestone && item.years"
-          class="milestone"
-          :class="[`milestone--${milestone}`, { 'milestone--today': item.daysFromToday === 0 }]"
-          role="img"
-          :aria-label="detail"
-        >
-          <strong>{{ yearsText(item.years) }}</strong>
-          <small>{{ t('upcoming.yearsUnit', Math.ceil(item.years)) }}</small>
+          <small v-else-if="text.subline">{{ text.subline }}</small>
         </span>
       </button>
+      <RouterLink
+        v-if="giftInRow && primary"
+        class="gift-action"
+        :to="{ path: `/people/${primary.id}`, hash: '#wishlist' }"
+        :aria-label="t('wishes.giftFor', { name: firstName(primary) })"
+      >
+        <Gift :size="18" />
+        <span class="gift-action__count">{{ openWishes }}</span>
+      </RouterLink>
+      <span
+        v-if="milestone && item.years"
+        class="milestone"
+        :class="[`milestone--${milestone}`, { 'milestone--today': item.daysFromToday === 0 }]"
+        role="img"
+        :aria-label="detail"
+      >
+        <strong>{{ yearsText(item.years) }}</strong>
+        <small>{{ t('upcoming.yearsUnit', Math.ceil(item.years)) }}</small>
+      </span>
       <button
         v-if="item.kind === 'reminder'"
         class="memo-check"
@@ -208,7 +222,7 @@ function open(): void {
         <Check v-if="item.done" :size="16" :stroke-width="3" />
       </button>
     </div>
-    <div v-if="!compact && (phone || email || openWishes || editable)" class="agenda-card__actions">
+    <div v-if="hasActionRow" class="agenda-card__actions">
       <button
         v-if="editable"
         class="contact-action"
@@ -220,11 +234,12 @@ function open(): void {
       </button>
       <RouterLink
         v-if="openWishes && primary"
-        class="contact-action contact-action--gift"
+        class="gift-action"
         :to="{ path: `/people/${primary.id}`, hash: '#wishlist' }"
         :aria-label="t('wishes.giftFor', { name: firstName(primary) })"
       >
-        <Gift :size="18" /> <span>{{ openWishes }}</span>
+        <Gift :size="18" />
+        <span class="gift-action__count">{{ openWishes }}</span>
       </RouterLink>
       <a
         v-if="phone"

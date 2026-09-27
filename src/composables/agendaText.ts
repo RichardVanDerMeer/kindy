@@ -16,6 +16,47 @@ export function primaryPerson(people: Person[]): Person | undefined {
 }
 
 /**
+ * The two lines of an agenda card: who it is about, then what it is.
+ * Memos, appointments and own events lead with their own title.
+ */
+export function agendaCardText(
+  item: AgendaItem,
+  people: Person[],
+  t: Translate,
+  locale: string,
+): { headline: string; subline: string } {
+  const primary = primaryPerson(people)
+  const what = t(`upcoming.cardKinds.${item.kind}`)
+  const join = (...parts: Array<string | undefined>) => parts.filter(Boolean).join(' · ')
+  switch (item.kind) {
+    case 'wedding-anniversary':
+    case 'anniversary':
+      return { headline: people.map(firstName).join(' & '), subline: what }
+    case 'birthday':
+      return { headline: primary ? firstName(primary) : '', subline: what }
+    case 'work-anniversary':
+      return { headline: primary ? firstName(primary) : '', subline: join(what, item.title) }
+    case 'memorial-death':
+    case 'memorial-birth':
+      return {
+        headline: primary ? firstName(primary) : '',
+        subline: join(
+          what,
+          item.years
+            ? t(`upcoming.cardDetails.${item.kind}`, { count: item.years }, item.years)
+            : undefined,
+        ),
+      }
+    case 'custom':
+      return { headline: item.title ?? '', subline: people.map(firstName).join(' & ') || what }
+    default: {
+      const { title, detail } = describeAgendaItem(item, people, t, locale)
+      return { headline: title, subline: detail }
+    }
+  }
+}
+
+/**
  * Title and detail line for an agenda item, as shown in the app and on the
  * home-screen widget. `people` are the item's people, in order.
  */

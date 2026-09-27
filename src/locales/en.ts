@@ -202,6 +202,21 @@ export default {
       appointment: 'Appointments',
       other: 'Other',
     },
+    cardKinds: {
+      birthday: 'Birthday',
+      'wedding-anniversary': 'Wedding day',
+      anniversary: 'Anniversary',
+      'work-anniversary': 'Work anniversary',
+      'memorial-death': 'Day of passing',
+      'memorial-birth': 'Birthday',
+      custom: 'Event',
+      reminder: 'Memo',
+      appointment: 'Appointment',
+    },
+    cardDetails: {
+      'memorial-death': '{count} years ago | 1 year ago | {count} years ago',
+      'memorial-birth': 'would turn {count}',
+    },
     kinds: {
       birthday: '{name}’s birthday',
       'wedding-anniversary': 'Wedding anniversary {names}',
@@ -219,7 +234,6 @@ export default {
       anniversary: '{count} years',
       'work-anniversary': '{years} years in the job',
       workAt: '{years} years at {title}',
-      atEmployer: 'at {title}',
       'memorial-death':
         'Passed away {count} years ago | Passed away 1 year ago | Passed away {count} years ago',
       'memorial-birth': 'Would have turned {count}',

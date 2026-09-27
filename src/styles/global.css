@@ -1857,26 +1857,9 @@ button.connection-person:focus-visible {
   line-clamp: 2;
 }
 
-.agenda-card__when,
 .agenda-card__copy small {
   color: var(--color-text-muted);
   font-size: 0.82rem;
-}
-
-.agenda-card__when::first-letter {
-  text-transform: uppercase;
-}
-
-.today-pill {
-  display: inline-block;
-  padding: 1px 9px;
-  border-radius: 999px;
-  background: var(--color-primary);
-  color: #fff;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .agenda-card--today {
@@ -2946,16 +2929,6 @@ button.section-link {
   color: var(--color-danger);
 }
 
-.contact-action--gift {
-  width: auto;
-  gap: 4px;
-  padding: 0 12px;
-  background: #ffe8ef;
-  color: #b3436a;
-  font-weight: 800;
-  text-decoration: none;
-}
-
 /* Calendar */
 
 .appointment-row__copy {
@@ -3611,11 +3584,6 @@ button.contact-action {
     radial-gradient(circle, #26a69a 0 1.8px, transparent 2.3px) 34px 4px / 56px 40px;
 }
 
-.agenda-card--mood-birthday .today-pill,
-.agenda-card--mood-work .today-pill {
-  background: linear-gradient(90deg, #ff9800, #ec407a);
-}
-
 .agenda-card--mood-wedding {
   border-color: rgba(236, 64, 122, 0.25);
   background: linear-gradient(115deg, #fffaf3 0%, #fdeef3 60%, #f6edff 100%);
@@ -3625,10 +3593,6 @@ button.contact-action {
 .agenda-card--mood-wedding::before {
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='48'%3E%3Cpath d='M14 20c-3-3.4-9-1.6-9 3 0 4.6 9 10 9 10s9-5.4 9-10c0-4.6-6-6.4-9-3z' fill='%23f48fb1' opacity='.5'/%3E%3Cpath d='M42 6c-2-2.2-6-1-6 2 0 3 6 6.5 6 6.5s6-3.5 6-6.5c0-3-4-4.2-6-2z' fill='%23ce93d8' opacity='.55'/%3E%3C/svg%3E")
     0 0 / 56px 48px;
-}
-
-.agenda-card--mood-wedding .today-pill {
-  background: linear-gradient(90deg, #ec407a, #ab47bc);
 }
 
 /* A day of remembrance: calm colours and a soft candle glow */
@@ -3646,12 +3610,145 @@ button.contact-action {
   mask-image: none;
 }
 
-.agenda-card--mood-remembrance .today-pill {
-  background: #8c7ba3;
+/* Upcoming cards, calmer: the date column says when, the text says who and what */
+
+.agenda-date {
+  width: 46px;
 }
 
-/* The circle takes room; let a couple's names use a third line. */
-.agenda-card__main:has(.milestone) .agenda-card__copy strong {
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
+.agenda-date small {
+  color: var(--color-text-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.agenda-date--today small,
+.agenda-date--today strong {
+  color: var(--color-primary-strong);
+}
+
+.agenda-card--mood-birthday .agenda-date--today *,
+.agenda-card--mood-work .agenda-date--today * {
+  color: #c2410c;
+}
+
+.agenda-card--mood-wedding .agenda-date--today * {
+  color: #ad2f63;
+}
+
+.agenda-card--mood-remembrance .agenda-date--today * {
+  color: #6f5f86;
+}
+
+.agenda-card__copy strong {
+  font-size: 1.02rem;
+}
+
+.agenda-card__actions {
+  gap: 6px;
+  margin-top: -8px;
+}
+
+.agenda-card__actions .contact-action {
+  width: 38px;
+  height: 38px;
+}
+
+/* The small event icon on the avatar: bigger, and a colour per kind of event */
+
+.agenda-card__badge {
+  right: -6px;
+  bottom: -4px;
+  width: 26px;
+  height: 26px;
+}
+
+.agenda-card__visual--pair .agenda-card__badge {
+  right: 4px;
+}
+
+.agenda-card__badge--birthday {
+  background: #f08a00;
+}
+
+.agenda-card__badge--wedding {
+  background: #e0457b;
+}
+
+.agenda-card__badge--work {
+  background: #14897c;
+}
+
+.agenda-card__badge--appointment {
+  background: #2f6fdb;
+}
+
+.agenda-card__badge--reminder {
+  background: var(--color-primary);
+}
+
+.agenda-card__badge--other {
+  background: #5c6bc0;
+}
+
+.agenda-card__badge--memorial,
+.agenda-card--memorial .agenda-card__badge {
+  background: #8c8794;
+}
+
+/* Event icon: whole-pixel centring, and clear of the second avatar of a couple */
+
+.agenda-card__visual--pair .agenda-card__badge {
+  right: -10px;
+  bottom: -6px;
+}
+
+/* The circle and an inline gift sit in the card row, right of the text */
+
+.agenda-card__row > .milestone {
+  align-self: center;
+  margin-right: var(--space-3);
+}
+
+.gift-action {
+  position: relative;
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #ffe8ef;
+  color: #b3436a;
+  text-decoration: none;
+}
+
+.agenda-card__row > .gift-action {
+  margin-right: var(--space-2);
+}
+
+.agenda-card__row > .gift-action:last-child {
+  margin-right: var(--space-3);
+}
+
+.gift-action__count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  border: 2px solid var(--color-surface-solid);
+  border-radius: 999px;
+  background: #d6336c;
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
 }

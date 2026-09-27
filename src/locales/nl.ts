@@ -202,6 +202,21 @@ export default {
       appointment: 'Afspraken',
       other: 'Overig',
     },
+    cardKinds: {
+      birthday: 'Verjaardag',
+      'wedding-anniversary': 'Trouwdag',
+      anniversary: 'Jubileum',
+      'work-anniversary': 'Werkjubileum',
+      'memorial-death': 'Sterfdag',
+      'memorial-birth': 'Geboortedag',
+      custom: 'Gebeurtenis',
+      reminder: 'Memo',
+      appointment: 'Afspraak',
+    },
+    cardDetails: {
+      'memorial-death': '{count} jaar geleden | 1 jaar geleden | {count} jaar geleden',
+      'memorial-birth': 'zou {count} worden',
+    },
     kinds: {
       birthday: '{name} is jarig',
       'wedding-anniversary': 'Trouwdag {names}',
@@ -219,7 +234,6 @@ export default {
       anniversary: '{count} jaar',
       'work-anniversary': '{years} jaar in dienst',
       workAt: '{years} jaar bij {title}',
-      atEmployer: 'bij {title}',
       'memorial-death':
         '{count} jaar geleden overleden | 1 jaar geleden overleden | {count} jaar geleden overleden',
       'memorial-birth': 'Zou {count} zijn geworden',
