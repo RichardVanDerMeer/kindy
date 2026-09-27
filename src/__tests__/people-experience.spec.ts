@@ -106,6 +106,32 @@ describe('agenda', () => {
     ])
   })
 
+  it('adds work anniversaries for milestones while the job lasts', () => {
+    const agenda = buildAgenda(
+      data({
+        people: [
+          person('robin', {
+            jobs: [
+              { id: 'now', employer: 'TRES', startedOn: '2016-10' },
+              { id: 'first', title: 'Stagiair', startedOn: '2025-10' },
+              { id: 'half', employer: 'Oud', startedOn: '2014-04', endedOn: '2030-01' },
+              { id: 'left', employer: 'Weg', startedOn: '2021-10', endedOn: '2026-06' },
+              { id: 'odd', employer: 'Oneven', startedOn: '2019-10' },
+            ],
+          }),
+        ],
+      }),
+      today,
+      { daysBack: 7, daysAhead: 30 },
+    )
+    expect(agenda.map((item) => [item.id, item.date, item.years, item.title])).toEqual([
+      ['job-first:1', '2026-10-01', 1, 'Stagiair'],
+      ['job-half:12.5', '2026-10-01', 12.5, 'Oud'],
+      ['job-now:10', '2026-10-01', 10, 'TRES'],
+    ])
+    expect(agendaFilterFor('work-anniversary')).toBe('work')
+  })
+
   it('wraps around the new year and skips leap days in other years', () => {
     const agenda = buildAgenda(
       data({
@@ -216,6 +242,7 @@ describe('upcoming filters', () => {
     for (const filter of [
       'birthday',
       'wedding',
+      'work',
       'memorial',
       'appointment',
       'reminder',

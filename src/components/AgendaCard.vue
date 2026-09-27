@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import {
   Bell,
+  BriefcaseBusiness,
   Cake,
   CalendarClock,
   CalendarHeart,
@@ -17,7 +18,7 @@ import {
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
-import { describeAgendaItem, firstName, primaryPerson } from '@/composables/agendaText'
+import { describeAgendaItem, firstName, primaryPerson, yearsText } from '@/composables/agendaText'
 import type { AgendaItem } from '@/domain/agenda'
 import type { Person } from '@/domain/model'
 import { useEditorsStore } from '@/stores/editors'
@@ -83,6 +84,8 @@ const icon = computed(() => {
     case 'wedding-anniversary':
     case 'anniversary':
       return Heart
+    case 'work-anniversary':
+      return BriefcaseBusiness
     case 'memorial-birth':
     case 'memorial-death':
       return Flower2
@@ -96,6 +99,29 @@ const icon = computed(() => {
 })
 
 const isMemorial = computed(() => props.item.kind.startsWith('memorial'))
+
+/** Celebrations show their number in a circle: the age, years married or years at work. */
+const milestone = computed(() => {
+  const { kind, years } = props.item
+  if (!years) return undefined
+  if (kind === 'birthday') return 'birthday'
+  if (kind === 'wedding-anniversary' || kind === 'anniversary') return 'wedding'
+  if (kind === 'work-anniversary') return 'work'
+  return undefined
+})
+/** Next to the circle the detail line only adds what the circle doesn't say. */
+const shownDetail = computed(() => {
+  if (!milestone.value) return detail.value
+  return props.item.kind === 'work-anniversary' && props.item.title
+    ? t('upcoming.details.atEmployer', { title: props.item.title })
+    : ''
+})
+/** Today's celebrations get a festive card; a day of remembrance a quiet one. */
+const mood = computed(() => {
+  if (props.item.daysFromToday !== 0) return undefined
+  if (isMemorial.value) return 'remembrance'
+  return milestone.value ?? (props.item.kind === 'birthday' ? 'birthday' : undefined)
+})
 
 function contact(kind: 'phone' | 'email'): string | undefined {
   const points = primary.value?.contactPoints.filter((point) => point.kind === kind) ?? []
@@ -120,6 +146,7 @@ function open(): void {
       'agenda-card--memorial': isMemorial,
       'agenda-card--compact': compact,
       'agenda-card--done': item.done,
+      [`agenda-card--mood-${mood}`]: mood,
     }"
   >
     <div class="agenda-card__row">
@@ -157,7 +184,17 @@ function open(): void {
           </span>
           <strong>{{ title }}</strong>
           <small v-if="item.done" class="agenda-card__done">{{ t('upcoming.doneLabel') }}</small>
-          <small v-else-if="detail">{{ detail }}</small>
+          <small v-else-if="shownDetail">{{ shownDetail }}</small>
+        </span>
+        <span
+          v-if="milestone && item.years"
+          class="milestone"
+          :class="[`milestone--${milestone}`, { 'milestone--today': item.daysFromToday === 0 }]"
+          role="img"
+          :aria-label="detail"
+        >
+          <strong>{{ yearsText(item.years) }}</strong>
+          <small>{{ t('upcoming.yearsUnit', Math.ceil(item.years)) }}</small>
         </span>
       </button>
       <button

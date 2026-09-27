@@ -3512,3 +3512,146 @@ button.contact-action {
   position: relative;
   padding-right: 48px;
 }
+
+/* Upcoming: a circle with the number for celebrations */
+
+.milestone {
+  display: flex;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  align-self: flex-start;
+  justify-content: center;
+  border-radius: 50%;
+  line-height: 1;
+}
+
+.milestone strong {
+  font-size: 1.12rem;
+  font-weight: 800;
+}
+
+.milestone small {
+  margin-top: 1px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.milestone--birthday {
+  background: #fff1dc;
+  color: #b25e00;
+}
+
+.milestone--wedding {
+  background: #fde7ef;
+  color: #ad2f63;
+}
+
+.milestone--work {
+  background: #e3f3f1;
+  color: #1f6f66;
+}
+
+.milestone--today {
+  width: 54px;
+  height: 54px;
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14);
+}
+
+.milestone--today strong {
+  font-size: 1.3rem;
+}
+
+.milestone--birthday.milestone--today {
+  background: linear-gradient(135deg, #ffb300, #f06292);
+}
+
+.milestone--wedding.milestone--today {
+  background: linear-gradient(135deg, #f48fb1, #9c64c8);
+}
+
+.milestone--work.milestone--today {
+  background: linear-gradient(135deg, #26a69a, #5c6bc0);
+}
+
+/* Today's celebrations: confetti or hearts on the right, fading behind the text */
+
+.agenda-card[class*='agenda-card--mood-'] {
+  position: relative;
+  isolation: isolate;
+}
+
+.agenda-card[class*='agenda-card--mood-']::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  content: '';
+  pointer-events: none;
+  mask-image: linear-gradient(to right, transparent 45%, #000 90%);
+}
+
+.agenda-card--mood-birthday,
+.agenda-card--mood-work {
+  border-color: rgba(255, 152, 0, 0.35);
+  background: linear-gradient(115deg, #fff8ec 0%, #ffeef4 55%, #f3ecff 100%);
+  box-shadow: 0 12px 30px rgba(240, 98, 146, 0.2);
+}
+
+.agenda-card--mood-birthday::before,
+.agenda-card--mood-work::before {
+  background:
+    radial-gradient(circle, #ffb300 0 2.5px, transparent 3px) 8px 6px / 44px 34px,
+    radial-gradient(circle, #f06292 0 2px, transparent 2.5px) 26px 20px / 38px 42px,
+    radial-gradient(circle, #7c4dff 0 2px, transparent 2.5px) 14px 28px / 50px 46px,
+    radial-gradient(circle, #26a69a 0 1.8px, transparent 2.3px) 34px 4px / 56px 40px;
+}
+
+.agenda-card--mood-birthday .today-pill,
+.agenda-card--mood-work .today-pill {
+  background: linear-gradient(90deg, #ff9800, #ec407a);
+}
+
+.agenda-card--mood-wedding {
+  border-color: rgba(236, 64, 122, 0.25);
+  background: linear-gradient(115deg, #fffaf3 0%, #fdeef3 60%, #f6edff 100%);
+  box-shadow: 0 12px 30px rgba(236, 64, 122, 0.16);
+}
+
+.agenda-card--mood-wedding::before {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='48'%3E%3Cpath d='M14 20c-3-3.4-9-1.6-9 3 0 4.6 9 10 9 10s9-5.4 9-10c0-4.6-6-6.4-9-3z' fill='%23f48fb1' opacity='.5'/%3E%3Cpath d='M42 6c-2-2.2-6-1-6 2 0 3 6 6.5 6 6.5s6-3.5 6-6.5c0-3-4-4.2-6-2z' fill='%23ce93d8' opacity='.55'/%3E%3C/svg%3E")
+    0 0 / 56px 48px;
+}
+
+.agenda-card--mood-wedding .today-pill {
+  background: linear-gradient(90deg, #ec407a, #ab47bc);
+}
+
+/* A day of remembrance: calm colours and a soft candle glow */
+
+.agenda-card--mood-remembrance {
+  border-color: rgba(140, 123, 163, 0.3);
+  background: linear-gradient(160deg, #f5f3f8 0%, #ebe7f1 100%);
+  box-shadow: 0 8px 22px rgba(70, 60, 90, 0.1);
+}
+
+.agenda-card--mood-remembrance::before {
+  background:
+    radial-gradient(circle at 90% 35%, rgba(255, 226, 170, 0.55), transparent 32%),
+    radial-gradient(circle at 20% 110%, rgba(200, 190, 220, 0.5), transparent 45%);
+  mask-image: none;
+}
+
+.agenda-card--mood-remembrance .today-pill {
+  background: #8c7ba3;
+}
+
+/* The circle takes room; let a couple's names use a third line. */
+.agenda-card__main:has(.milestone) .agenda-card__copy strong {
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}

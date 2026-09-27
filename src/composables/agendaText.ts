@@ -5,6 +5,11 @@ type Translate = (key: string, named?: Record<string, unknown>, plural?: number)
 
 export const firstName = (person: Person) => person.givenName ?? person.displayName
 
+/** Whole years as a number, a half year (12.5) as "12½". */
+export function yearsText(years: number): string {
+  return Number.isInteger(years) ? String(years) : `${Math.floor(years)}½`
+}
+
 /** The person an item is about: skip the user themselves, e.g. on a shared wedding day. */
 export function primaryPerson(people: Person[]): Person | undefined {
   return people.find((person) => !person.isSelf) ?? people[0]
@@ -37,6 +42,10 @@ export function describeAgendaItem(
         )
       : t('calendar.allDay')
     detail = [time, item.location].filter(Boolean).join(' · ')
+  } else if (item.kind === 'work-anniversary' && item.years) {
+    detail = item.title
+      ? t('upcoming.details.workAt', { years: yearsText(item.years), title: item.title })
+      : t('upcoming.details.work-anniversary', { years: yearsText(item.years) })
   } else if (item.years) {
     detail = t(`upcoming.details.${item.kind}`, { count: item.years }, item.years)
   }

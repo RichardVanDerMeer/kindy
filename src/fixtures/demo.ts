@@ -17,6 +17,14 @@ function inDays(offset: number, year: number | null): PartialDate {
   return { year, month: date.getMonth() + 1, day: date.getDate() }
 }
 
+/** YYYY-MM of next month, `yearsAgo` years back: an anniversary within a few weeks. */
+function startedYearsBeforeNextMonth(yearsAgo: number): string {
+  const date = new Date(now)
+  date.setDate(1)
+  date.setMonth(date.getMonth() + 1)
+  return `${date.getFullYear() - yearsAgo}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
 function at(offsetDays: number, hour: number): number {
   const date = new Date(now + offsetDays * DAY)
   date.setHours(hour, 0, 0, 0)
@@ -90,6 +98,21 @@ export const demoData: KindyData = {
     person('demo-richard', 'Richard van der Meer', {
       isSelf: true,
       birthDate: inDays(40, 1984),
+      jobs: [
+        {
+          id: 'job-richard-now',
+          title: 'Product designer',
+          employer: 'Voorbeeldbedrijf',
+          startedOn: '2019-04',
+        },
+        {
+          id: 'job-richard-before',
+          title: 'Interaction designer',
+          employer: 'Ontwerpbureau',
+          startedOn: '2012-09',
+          endedOn: '2019-03',
+        },
+      ],
       contactPoints: [
         contact('demo-richard', 'phone', '+31 6 12345600'),
         contact('demo-richard', 'phone', '+31 30 1234567', 'work'),
@@ -99,22 +122,6 @@ export const demoData: KindyData = {
         contact('demo-richard', 'url', 'kindy.demo', 'instagram'),
       ],
       details: [
-        {
-          id: 'detail-richard-work',
-          definitionId: 'occupation',
-          label: 'occupation',
-          value: 'Product designer',
-          valueType: 'text',
-          source: 'kindy',
-        },
-        {
-          id: 'detail-richard-employer',
-          definitionId: 'employer',
-          label: 'employer',
-          value: 'Voorbeeldbedrijf',
-          valueType: 'text',
-          source: 'kindy',
-        },
         {
           id: 'detail-richard-interests',
           definitionId: 'interests',
@@ -167,6 +174,14 @@ export const demoData: KindyData = {
         contact('demo-robin', 'phone', '+31 6 23456701'),
         contact('demo-robin', 'email', 'robin@example.com'),
         contact('demo-robin', 'address', 'Wilhelminapark 3, 3581 NA Utrecht', 'home'),
+      ],
+      jobs: [
+        {
+          id: 'job-robin-now',
+          title: 'Huisarts',
+          employer: 'Gezondheidscentrum Oost',
+          startedOn: startedYearsBeforeNextMonth(10),
+        },
       ],
     }),
     person('demo-daan', 'Daan Visser', {

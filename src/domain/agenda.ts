@@ -1,10 +1,15 @@
+import { jobsOf } from './jobs'
 import { divorceEnding } from './marriage'
-import type { EntityId, ImportantEvent, KindyData, PartialDate } from './model'
+import type { EntityId, ImportantEvent, Job, KindyData, PartialDate } from './model'
+
+/** Work anniversaries worth a mention: the first year, 12½ years and every five years. */
+const workMilestones = [1, 5, 10, 12.5, 15, 20, 25, 30, 35, 40, 45, 50]
 
 export type AgendaKind =
   | 'birthday'
   | 'wedding-anniversary'
   | 'anniversary'
+  | 'work-anniversary'
   | 'memorial-death'
   | 'memorial-birth'
   | 'custom'
@@ -13,11 +18,12 @@ export type AgendaKind =
 
 /** Filter groups shown in the Upcoming view. */
 export type AgendaFilter =
-  'birthday' | 'wedding' | 'memorial' | 'appointment' | 'reminder' | 'other'
+  'birthday' | 'wedding' | 'work' | 'memorial' | 'appointment' | 'reminder' | 'other'
 
 export const agendaFilters: AgendaFilter[] = [
   'birthday',
   'wedding',
+  'work',
   'memorial',
   'appointment',
   'reminder',
@@ -32,11 +38,11 @@ export interface AgendaItem {
   /** Whole days from today: 0 is today, negative is in the past. */
   daysFromToday: number
   personIds: EntityId[]
-  /** Age, years married or years since, when the original year is known. */
+  /** Age, years married, years at a job (12.5 included) or years since, when known. */
   years?: number
   /** A memo that was ticked off: still shown, marked as done. */
   done?: boolean
-  /** Title for custom events, reminders and appointments. */
+  /** Title for custom events, reminders and appointments; the employer for a work anniversary. */
   title?: string
   /** Start time of an appointment; absent for whole-day items. */
   startsAt?: number
@@ -72,6 +78,8 @@ export function agendaFilterFor(kind: AgendaKind): AgendaFilter {
       return 'birthday'
     case 'wedding-anniversary':
       return 'wedding'
+    case 'work-anniversary':
+      return 'work'
     case 'memorial-birth':
     case 'memorial-death':
       return 'memorial'
@@ -185,6 +193,34 @@ export function buildAgenda(
     }
     if (person.isDeceased && person.deathDate) {
       addAnnual(`death-${person.id}`, 'memorial-death', person.deathDate, [person.id])
+    }
+  }
+
+  for (const person of data.people) {
+    if (!activePeople.has(person.id) || person.isDeceased) continue
+    for (const job of jobsOf(person)) addWorkAnniversaries(person.id, job)
+  }
+
+  function addWorkAnniversaries(personId: EntityId, job: Job): void {
+    const [startYear = 0, startMonth = 0] = (job.startedOn ?? '').split('-').map(Number)
+    if (!startYear || !startMonth) return
+    for (const years of workMilestones) {
+      // Only the month is known, so the anniversary falls on the first of that month.
+      const months = startYear * 12 + startMonth - 1 + years * 12
+      const occurrence = { year: Math.floor(months / 12), month: (months % 12) + 1, day: 1 }
+      const offset = dayNumber(occurrence) - todayNumber
+      if (offset < -window.daysBack || offset > window.daysAhead) continue
+      // Someone who left before the anniversary has nothing to celebrate there.
+      if (job.endedOn && job.endedOn < isoDay(occurrence).slice(0, 7)) continue
+      items.push({
+        id: `job-${job.id}:${years}`,
+        kind: 'work-anniversary',
+        date: isoDay(occurrence),
+        daysFromToday: offset,
+        personIds: [personId],
+        years,
+        title: job.employer ?? job.title,
+      })
     }
   }
 
