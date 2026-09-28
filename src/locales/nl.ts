@@ -260,6 +260,12 @@ export default {
     security: 'Beveiliging',
     sources: 'Contacten & Google',
     language: 'Taal',
+    nameOrder: 'Namen weergeven',
+    nameOrderHint: 'Volgorde van namen op de pagina Mensen.',
+    nameOrders: {
+      'given-first': 'Voornaam eerst',
+      'family-first': 'Achternaam eerst',
+    },
     languageHint: 'De taal waarin Kindy wordt getoond.',
     appLock: 'Appslot',
     appLockHint: 'Bescherm Kindy met biometrie of het slot van je apparaat.',

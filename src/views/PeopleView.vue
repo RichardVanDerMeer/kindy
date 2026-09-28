@@ -10,10 +10,13 @@ import PersonAvatar from '@/components/PersonAvatar.vue'
 import ViewHeader from '@/components/ViewHeader.vue'
 import { formatPartialDate } from '@/domain/dates'
 import type { Person } from '@/domain/model'
+import { listName, sortByName } from '@/domain/names'
 import { useKindyStore } from '@/stores/kindy'
+import { usePreferencesStore } from '@/stores/preferences'
 import type { ExternalContactsConnection, ExternalContactSnapshot } from '@/domain/ports'
 
 const store = useKindyStore()
+const preferences = usePreferencesStore()
 const router = useRouter()
 const route = useRoute()
 const { locale, t } = useI18n()
@@ -38,7 +41,7 @@ watch(query, async (value) => {
 
 const filteredPeople = computed(() => {
   const memberships = store.data?.memberships ?? []
-  return store.people.filter((person) => {
+  return sortByName(store.people, preferences.nameOrder, locale.value).filter((person) => {
     const matchesFilter =
       filter.value === 'all' ||
       (filter.value === 'favorites' && person.isFavorite) ||
@@ -133,7 +136,7 @@ async function importGoogleContacts(
             :deceased="person.isDeceased"
           />
           <span class="person-row__copy">
-            <strong>{{ person.displayName }}</strong>
+            <strong>{{ listName(person, preferences.nameOrder) }}</strong>
             <span>{{ person.isSelf ? $t('me.you') : personSubtitle(person) }}</span>
           </span>
         </button>

@@ -260,6 +260,12 @@ export default {
     security: 'Security',
     sources: 'Contacts & Google',
     language: 'Language',
+    nameOrder: 'Show names',
+    nameOrderHint: 'Order of names on the People page.',
+    nameOrders: {
+      'given-first': 'First name first',
+      'family-first': 'Last name first',
+    },
     languageHint: 'The language Kindy uses.',
     appLock: 'App lock',
     appLockHint: 'Protect Kindy with biometrics or your device credential.',

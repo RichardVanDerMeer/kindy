@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  ArrowDownAZ,
   Apple,
   ArrowLeft,
   CalendarDays,
@@ -23,6 +24,8 @@ import { useWidgetStore } from '@/stores/widget'
 import { supportedLocales, useLocaleSetting } from '@/composables/useLocaleSetting'
 import { useKindyStore } from '@/stores/kindy'
 import { useSecurityStore } from '@/stores/security'
+import type { NameOrder } from '@/domain/names'
+import { usePreferencesStore } from '@/stores/preferences'
 
 const router = useRouter()
 const security = useSecurityStore()
@@ -58,6 +61,9 @@ async function toggleLock(): Promise<void> {
     savingLock.value = false
   }
 }
+
+const preferences = usePreferencesStore()
+const nameOrders: NameOrder[] = ['given-first', 'family-first']
 </script>
 
 <template>
@@ -87,6 +93,26 @@ async function toggleLock(): Promise<void> {
           @click="setLocale(option.code)"
         >
           {{ option.label }}
+        </button>
+      </div>
+    </article>
+
+    <article class="card settings-card">
+      <div class="settings-card__icon"><ArrowDownAZ :size="24" /></div>
+      <div class="settings-card__copy">
+        <h2>{{ $t('settings.nameOrder') }}</h2>
+        <p>{{ $t('settings.nameOrderHint') }}</p>
+      </div>
+      <div class="segmented" role="radiogroup" :aria-label="$t('settings.nameOrder')">
+        <button
+          v-for="order in nameOrders"
+          :key="order"
+          role="radio"
+          :aria-checked="preferences.nameOrder === order"
+          :class="{ active: preferences.nameOrder === order }"
+          @click="preferences.setNameOrder(order)"
+        >
+          {{ $t(`settings.nameOrders.${order}`) }}
         </button>
       </div>
     </article>

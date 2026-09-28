@@ -24,35 +24,71 @@ export function agendaCardText(
   people: Person[],
   t: Translate,
   locale: string,
-): { headline: string; subline: string } {
-  const primary = primaryPerson(people)
-  const what = t(`upcoming.cardKinds.${item.kind}`)
+): { headline: string; familyLine?: string; what: string; whatIsTitle: boolean } {
+  const kind = t(`upcoming.cardKinds.${item.kind}`)
   const join = (...parts: Array<string | undefined>) => parts.filter(Boolean).join(' · ')
+  const time =
+    item.kind === 'appointment'
+      ? item.startsAt
+        ? new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(
+            item.startsAt,
+          )
+        : t('calendar.allDay')
+      : undefined
+
+  // What happens: the kind of day, or the memo's or appointment's own title.
+  let what: string
+  let whatIsTitle = false
   switch (item.kind) {
-    case 'wedding-anniversary':
-    case 'anniversary':
-      return { headline: people.map(firstName).join(' & '), subline: what }
-    case 'birthday':
-      return { headline: primary ? firstName(primary) : '', subline: what }
     case 'work-anniversary':
-      return { headline: primary ? firstName(primary) : '', subline: join(what, item.title) }
+      what = join(kind, item.title)
+      break
     case 'memorial-death':
     case 'memorial-birth':
-      return {
-        headline: primary ? firstName(primary) : '',
-        subline: join(
-          what,
-          item.years
-            ? t(`upcoming.cardDetails.${item.kind}`, { count: item.years }, item.years)
-            : undefined,
-        ),
-      }
+      what = join(
+        kind,
+        item.years
+          ? t(`upcoming.cardDetails.${item.kind}`, { count: item.years }, item.years)
+          : undefined,
+      )
+      break
+    case 'reminder':
     case 'custom':
-      return { headline: item.title ?? '', subline: people.map(firstName).join(' & ') || what }
-    default: {
-      const { title, detail } = describeAgendaItem(item, people, t, locale)
-      return { headline: title, subline: detail }
+      what = item.title ?? kind
+      whatIsTitle = Boolean(item.title)
+      break
+    case 'appointment':
+      what = join(item.title, time)
+      whatIsTitle = Boolean(item.title)
+      break
+    default:
+      what = kind
+  }
+
+  // Who it is about: couples and appointments name everyone, the rest one person.
+  const shared =
+    item.kind === 'wedding-anniversary' ||
+    item.kind === 'anniversary' ||
+    item.kind === 'appointment' ||
+    item.kind === 'custom'
+  const primary = primaryPerson(people)
+  const who = shared ? people : primary ? [primary] : []
+  if (!who.length) {
+    // Nobody linked: the title leads, with the kind (or the time) underneath.
+    return {
+      headline: item.title ?? kind,
+      what: item.kind === 'appointment' ? join(time, item.location) : kind,
+      whatIsTitle: false,
     }
+  }
+  const shown = who.slice(0, 2)
+  const more = who.length - shown.length
+  const families = [...new Set(shown.map((person) => person.familyName?.trim()).filter(Boolean))]
+  return {
+    headline: shown.map(firstName).join(' & ') + (more ? ` +${more}` : ''),
+    familyLine: families.join(' & ') || undefined,
+    what,
+    whatIsTitle,
   }
 }
 

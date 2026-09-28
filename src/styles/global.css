@@ -1826,21 +1826,6 @@ button.connection-person:focus-visible {
   flex: 0 0 auto;
 }
 
-.agenda-card__badge {
-  position: absolute;
-  right: -4px;
-  bottom: -2px;
-  display: flex;
-  width: 22px;
-  height: 22px;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid var(--color-surface-solid);
-  border-radius: 50%;
-  background: var(--color-primary);
-  color: #fff;
-}
-
 .agenda-card__copy {
   display: flex;
   min-width: 0;
@@ -1863,19 +1848,12 @@ button.connection-person:focus-visible {
 }
 
 .agenda-card--today {
-  border-color: rgba(124, 77, 255, 0.35);
-  background:
-    radial-gradient(circle at 0 0, rgba(225, 208, 255, 0.9), transparent 60%),
-    var(--color-surface-solid);
-  box-shadow: 0 12px 30px rgba(124, 77, 255, 0.18);
+  border-color: rgba(var(--event-rgb), 0.55);
+  box-shadow: 0 10px 26px rgba(var(--event-rgb), 0.16);
 }
 
 .agenda-card--past {
   opacity: 0.78;
-}
-
-.agenda-card--memorial .agenda-card__badge {
-  background: #8c7ba3;
 }
 
 .agenda-card__actions {
@@ -2292,10 +2270,6 @@ a.chip {
   display: flex;
   width: 62px;
   justify-content: center;
-}
-
-.agenda-card__visual--pair .agenda-card__badge {
-  right: 6px;
 }
 
 /* Forms */
@@ -3392,7 +3366,7 @@ button.contact-action {
   opacity: 0.72;
 }
 
-.agenda-card--done .agenda-card__copy strong {
+.agenda-card--done .agenda-card__what span {
   color: var(--color-text-muted);
   text-decoration: line-through;
 }
@@ -3624,22 +3598,10 @@ button.contact-action {
   text-transform: uppercase;
 }
 
-.agenda-date--today small,
-.agenda-date--today strong {
-  color: var(--color-primary-strong);
-}
-
-.agenda-card--mood-birthday .agenda-date--today *,
-.agenda-card--mood-work .agenda-date--today * {
-  color: #c2410c;
-}
-
-.agenda-card--mood-wedding .agenda-date--today * {
-  color: #ad2f63;
-}
-
-.agenda-card--mood-remembrance .agenda-date--today * {
-  color: #6f5f86;
+.agenda-date small,
+.agenda-date--today strong,
+.agenda-date--today span {
+  color: var(--event-ink);
 }
 
 .agenda-card__copy strong {
@@ -3658,52 +3620,7 @@ button.contact-action {
 
 /* The small event icon on the avatar: bigger, and a colour per kind of event */
 
-.agenda-card__badge {
-  right: -6px;
-  bottom: -4px;
-  width: 26px;
-  height: 26px;
-}
-
-.agenda-card__visual--pair .agenda-card__badge {
-  right: 4px;
-}
-
-.agenda-card__badge--birthday {
-  background: #f08a00;
-}
-
-.agenda-card__badge--wedding {
-  background: #e0457b;
-}
-
-.agenda-card__badge--work {
-  background: #14897c;
-}
-
-.agenda-card__badge--appointment {
-  background: #2f6fdb;
-}
-
-.agenda-card__badge--reminder {
-  background: var(--color-primary);
-}
-
-.agenda-card__badge--other {
-  background: #5c6bc0;
-}
-
-.agenda-card__badge--memorial,
-.agenda-card--memorial .agenda-card__badge {
-  background: #8c8794;
-}
-
 /* Event icon: whole-pixel centring, and clear of the second avatar of a couple */
-
-.agenda-card__visual--pair .agenda-card__badge {
-  right: -10px;
-  bottom: -6px;
-}
 
 /* The circle and an inline gift sit in the card row, right of the text */
 
@@ -3751,4 +3668,94 @@ button.contact-action {
   font-size: 0.66rem;
   font-weight: 800;
   line-height: 1;
+}
+
+/* Upcoming: each kind of event has a colour, used behind the date and on the border */
+
+.agenda-card {
+  --event-rgb: 124, 77, 255;
+  --event-ink: #5b34d6;
+
+  position: relative;
+  isolation: isolate;
+  border-color: rgba(var(--event-rgb), 0.3);
+}
+
+.agenda-card::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0 auto 0 0;
+  width: 74px;
+  content: '';
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgba(var(--event-rgb), 0.16),
+    rgba(var(--event-rgb), 0.07) 70%,
+    rgba(var(--event-rgb), 0)
+  );
+}
+
+.agenda-card--today::after {
+  background: linear-gradient(
+    90deg,
+    rgba(var(--event-rgb), 0.26),
+    rgba(var(--event-rgb), 0.1) 70%,
+    rgba(var(--event-rgb), 0)
+  );
+}
+
+.agenda-card--kind-birthday {
+  --event-rgb: 240, 138, 0;
+  --event-ink: #b45f00;
+}
+
+.agenda-card--kind-wedding {
+  --event-rgb: 224, 69, 123;
+  --event-ink: #ad2f63;
+}
+
+.agenda-card--kind-work {
+  --event-rgb: 20, 137, 124;
+  --event-ink: #0f6d63;
+}
+
+.agenda-card--kind-memorial {
+  --event-rgb: 140, 135, 148;
+  --event-ink: #5f5a68;
+}
+
+.agenda-card--kind-appointment {
+  --event-rgb: 47, 111, 219;
+  --event-ink: #2457b0;
+}
+
+.agenda-card--kind-other {
+  --event-rgb: 92, 107, 192;
+  --event-ink: #3f4c9a;
+}
+
+/* Who: first name, family name below; then a small icon with what it is */
+
+.agenda-card__family {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agenda-card__copy .agenda-card__what {
+  margin-top: 2px;
+}
+
+.agenda-card__what svg {
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+
+.agenda-card__copy .agenda-card__what--title {
+  color: var(--color-text);
+  font-weight: 600;
 }

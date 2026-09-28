@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { normalizeContactLabel } from '@/domain/contactLabels'
 import { isCurrentJob, jobLabel, jobsOf } from '@/domain/jobs'
 import { divorceEnding } from '@/domain/marriage'
+import { familySortKey, listName, sortByName } from '@/domain/names'
 import type { ImportantEvent, Person } from '@/domain/model'
 import { socialDisplay, socialUrl } from '@/domain/social'
 
@@ -102,5 +103,39 @@ describe('jobs', () => {
     const today = new Date(2026, 8, 27)
     expect(jobs.filter((job) => isCurrentJob(job, today)).map((job) => job.id)).toEqual(['now'])
     expect(isCurrentJob({ id: 'x', endedOn: '2026-09' }, today)).toBe(true)
+  })
+})
+
+describe('name order', () => {
+  const people = [
+    {
+      id: 'r',
+      displayName: 'Richard van der Meer',
+      givenName: 'Richard',
+      familyName: 'van der Meer',
+    },
+    { id: 'a', displayName: 'Anouk Jansen', givenName: 'Anouk', familyName: 'Jansen' },
+    { id: 'p', displayName: 'Pieter' },
+  ] as unknown as Person[]
+
+  it('sorts on the family name without its prefixes, like a phone book', () => {
+    expect(familySortKey('van der Meer')).toBe('Meer')
+    expect(familySortKey('de Jong')).toBe('Jong')
+    expect(sortByName(people, 'family-first', 'nl').map((person) => person.id)).toEqual([
+      'a',
+      'r',
+      'p',
+    ])
+    expect(sortByName(people, 'given-first', 'nl').map((person) => person.id)).toEqual([
+      'a',
+      'p',
+      'r',
+    ])
+  })
+
+  it('shows "family name, first name" only when asked', () => {
+    expect(listName(people[0]!, 'family-first')).toBe('van der Meer, Richard')
+    expect(listName(people[0]!, 'given-first')).toBe('Richard van der Meer')
+    expect(listName(people[2]!, 'family-first')).toBe('Pieter')
   })
 })

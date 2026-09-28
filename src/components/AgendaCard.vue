@@ -93,6 +93,10 @@ const icon = computed(() => {
       return Bell
     case 'appointment':
       return CalendarClock
+    case 'memorial-birth':
+    case 'memorial-death':
+      // Someone who has died needs no symbol; the card says enough.
+      return undefined
     default:
       return CalendarHeart
   }
@@ -143,6 +147,7 @@ function open(): void {
       'agenda-card--today': item.daysFromToday === 0,
       'agenda-card--past': item.daysFromToday < 0,
       'agenda-card--memorial': isMemorial,
+      [`agenda-card--kind-${agendaFilterFor(item.kind)}`]: true,
       'agenda-card--compact': compact,
       'agenda-card--done': item.done,
       [`agenda-card--mood-${mood}`]: mood,
@@ -177,19 +182,19 @@ function open(): void {
             :deceased="primary.isDeceased"
             size="small"
           />
-          <span
-            v-if="!isMemorial"
-            class="agenda-card__badge"
-            :class="`agenda-card__badge--${agendaFilterFor(item.kind)}`"
-            aria-hidden="true"
-          >
-            <component :is="icon" :size="16" />
-          </span>
         </span>
         <span class="agenda-card__copy">
           <strong>{{ text.headline }}</strong>
+          <span v-if="text.familyLine" class="agenda-card__family">{{ text.familyLine }}</span>
+          <small
+            v-if="text.what"
+            class="agenda-card__what"
+            :class="{ 'agenda-card__what--title': text.whatIsTitle }"
+          >
+            <component :is="icon" v-if="icon" :size="14" aria-hidden="true" />
+            <span>{{ text.what }}</span>
+          </small>
           <small v-if="item.done" class="agenda-card__done">{{ t('upcoming.doneLabel') }}</small>
-          <small v-else-if="text.subline">{{ text.subline }}</small>
         </span>
       </button>
       <RouterLink
