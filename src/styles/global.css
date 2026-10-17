@@ -1197,6 +1197,17 @@ button.connection-person:focus-visible {
   margin-top: -7px;
 }
 
+/* Children and siblings: up to three side by side, more wrap to a new row */
+.family-people--children {
+  flex-wrap: wrap;
+  column-gap: 8px;
+  row-gap: var(--space-2);
+}
+
+.family-people--children > .connection-person {
+  width: min(118px, calc((100% - 16px) / 3));
+}
+
 .friends-card {
   background:
     radial-gradient(circle at 100% 0, rgba(195, 239, 218, 0.58), transparent 42%),
@@ -1427,6 +1438,143 @@ button.connection-person:focus-visible {
     border-radius: 38px;
     overflow: hidden;
   }
+}
+
+.widget-preview__row--festive {
+  background:
+    radial-gradient(circle at 78% 30%, #f97362 0 2px, transparent 3px),
+    radial-gradient(circle at 88% 70%, #9b7bff 0 2px, transparent 3px),
+    radial-gradient(circle at 70% 75%, #3cc6a0 0 2px, transparent 3px),
+    radial-gradient(circle at 95% 25%, #ffc531 0 2px, transparent 3px),
+    linear-gradient(90deg, #ffede0, #ffd9c2) !important;
+}
+
+.widget-preview__birthday {
+  color: #c2410c;
+}
+
+/* Adding connections: one row per person, person left and relationship right */
+.connection-rows {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.connection-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 6px;
+}
+
+.connection-row__person,
+.connection-row__role select {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  background: #fff;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 600;
+}
+
+.connection-row__person {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 12px;
+  text-align: left;
+}
+
+.connection-row__person span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-row__person--empty {
+  border-style: dashed;
+  color: var(--color-primary-strong);
+}
+
+.connection-row__role {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.connection-row__role select {
+  padding: 0 34px 0 12px;
+  appearance: none;
+}
+
+.connection-row__role select.placeholder {
+  color: var(--color-text-muted);
+}
+
+.connection-row__role svg {
+  position: absolute;
+  right: 12px;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.connection-row__remove {
+  width: 36px;
+  height: 36px;
+}
+
+.connection-suggestions {
+  margin-bottom: var(--space-3);
+}
+
+.chip--suggestion {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: inset 0 0 0 1px rgba(124, 77, 255, 0.35);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+}
+
+.chip--suggestion small {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.row-enter-active,
+.row-leave-active {
+  transition:
+    opacity 180ms ease,
+    transform 200ms ease;
+}
+
+.row-enter-from,
+.row-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.link-other-event {
+  margin: 0 0 var(--space-3);
+}
+
+.calendar-pick__earlier {
+  display: inline-block;
+  margin: var(--space-3) 0 var(--space-2);
+}
+
+.inline-form-heading--back {
+  justify-content: flex-start;
+  gap: var(--space-2);
+}
+
+.inline-form-heading--back h2 {
+  margin: 0;
 }
 
 /* Feedback and motion: every tap answers at once (reduced motion is honoured below) */

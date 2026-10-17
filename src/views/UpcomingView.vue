@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { CalendarPlus, ChevronDown, ChevronUp, Plus } from '@lucide/vue'
+import { CalendarPlus, ChevronDown, ChevronUp, Link2, Plus } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 
 import AddAgendaItemDialog from '@/components/AddAgendaItemDialog.vue'
 import type { AgendaDraft } from '@/domain/agendaDraft'
 import AgendaCard from '@/components/AgendaCard.vue'
 import CalendarSuggestions from '@/components/CalendarSuggestions.vue'
+import LinkCalendarEventDialog from '@/components/LinkCalendarEventDialog.vue'
 import ViewHeader from '@/components/ViewHeader.vue'
 import {
   agendaFilters,
@@ -24,6 +25,7 @@ const { t, locale } = useI18n()
 const selected = ref<Set<AgendaFilter>>(new Set())
 const showEarlier = ref(false)
 const showAdd = ref(false)
+const showLinkEvent = ref(false)
 
 const addError = ref<string>()
 
@@ -92,6 +94,15 @@ const groups = computed(() => {
       </button>
     </div>
     <CalendarSuggestions :limit="2" />
+    <!-- Appointments Kindy cannot match on a name can still be linked by hand. -->
+    <button
+      v-if="store.calendarPermission === 'granted'"
+      class="inline-action link-other-event"
+      @click="showLinkEvent = true"
+    >
+      <Link2 :size="16" /> {{ $t('calendar.linkOther') }}
+    </button>
+    <LinkCalendarEventDialog :open="showLinkEvent" @close="showLinkEvent = false" />
 
     <div class="filter-row" role="group" :aria-label="$t('upcoming.title')">
       <button

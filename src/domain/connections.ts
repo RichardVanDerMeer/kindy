@@ -195,3 +195,66 @@ export function siblingIds(personId: EntityId, relationships: Relationship[]): E
     )
   return [...new Set([...explicit, ...viaParents])]
 }
+
+/** Roles grouped as the connection picker shows them: "Parent: father, mother, parent". */
+export const connectionRoleGroups: Array<{ group: string; roles: RelationshipRole[] }> = [
+  { group: 'parent', roles: ['father', 'mother', 'parent'] },
+  { group: 'partner', roles: ['husband', 'wife', 'partner'] },
+  { group: 'child', roles: ['son', 'daughter', 'child'] },
+  { group: 'sibling', roles: ['brother', 'sister', 'sibling'] },
+  { group: 'friend', roles: ['best-friend', 'friend'] },
+]
+
+export function isChildRole(role: RelationshipRole): boolean {
+  return relationshipTypeForRole(role) === 'parent-of'
+}
+
+/** Current partners of a person. */
+export function partnerIds(personId: EntityId, relationships: Relationship[]): EntityId[] {
+  return relationships
+    .filter(
+      (relationship) =>
+        !relationship.endedOn &&
+        relationship.type === 'partner-of' &&
+        (relationship.fromPersonId === personId || relationship.toPersonId === personId),
+    )
+    .map((relationship) =>
+      relationship.fromPersonId === personId ? relationship.toPersonId : relationship.fromPersonId,
+    )
+}
+
+/** A person's children, with the role the parent sees ("son", "daughter", "child"). */
+export function childrenOf(
+  personId: EntityId,
+  relationships: Relationship[],
+): Array<{ personId: EntityId; role: RelationshipRole }> {
+  return relationships
+    .filter(
+      (relationship) =>
+        !relationship.endedOn &&
+        relationship.type === 'parent-of' &&
+        relationship.fromPersonId === personId,
+    )
+    .map((relationship) => ({
+      personId: relationship.toPersonId,
+      role: relationship.fromPersonRole ?? 'child',
+    }))
+}
+
+/**
+ * Children of the subject's partner who are not yet the subject's children:
+ * likely the subject's children too, offered as a one-tap suggestion.
+ */
+export function partnerChildSuggestions(
+  subjectId: EntityId,
+  relationships: Relationship[],
+): Array<{ personId: EntityId; role: RelationshipRole; viaPartnerId: EntityId }> {
+  const own = new Set(childrenOf(subjectId, relationships).map((child) => child.personId))
+  const seen = new Set<EntityId>()
+  return partnerIds(subjectId, relationships).flatMap((partnerId) =>
+    childrenOf(partnerId, relationships)
+      .filter((child) => child.personId !== subjectId && !own.has(child.personId))
+      .filter((child) => !seen.has(child.personId) && Boolean(seen.add(child.personId)))
+      .map((child) => ({ ...child, viaPartnerId: partnerId })),
+  )
+}

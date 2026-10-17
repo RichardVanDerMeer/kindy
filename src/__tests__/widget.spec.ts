@@ -75,9 +75,27 @@ describe('coming up widget snapshot', () => {
   it('never puts names or places on the home screen when names are hidden', () => {
     const snapshot = build([], true)
     expect(snapshot.items).toEqual([
-      { date: '2026-09-27', title: 'generic birthday', kind: 'birthday', personId: 'emma' },
-      { date: '2026-09-30', title: 'generic appointment', kind: 'appointment', personId: 'robin' },
-      { date: '2026-10-06', title: 'generic wedding', kind: 'wedding', personId: undefined },
+      {
+        date: '2026-09-27',
+        title: 'generic birthday',
+        kind: 'birthday',
+        kindLabel: 'generic birthday',
+        personId: 'emma',
+      },
+      {
+        date: '2026-09-30',
+        title: 'generic appointment',
+        kind: 'appointment',
+        kindLabel: 'generic appointment',
+        personId: 'robin',
+      },
+      {
+        date: '2026-10-06',
+        title: 'generic wedding',
+        kind: 'wedding',
+        kindLabel: 'generic wedding',
+        personId: undefined,
+      },
     ])
     expect(JSON.stringify(snapshot)).not.toMatch(/ title| detail|Zwaan/)
   })

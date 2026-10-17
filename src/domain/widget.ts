@@ -2,7 +2,7 @@ import { agendaFilterFor, matchesAgendaFilters, type AgendaFilter, type AgendaIt
 
 /** What the "Coming up" home-screen widget shows; written by the app, read by Android. */
 export interface ComingUpSnapshot {
-  version: 1
+  version: 2
   generatedAt: number
   heading: string
   empty: string
@@ -17,6 +17,8 @@ export interface ComingUpWidgetItem {
   title: string
   detail?: string
   kind: AgendaFilter
+  /** The type in words ("Birthday", "Appointment"), shown above the title. */
+  kindLabel: string
   /** Opens this person when tapped. An opaque id, never a name. */
   personId?: string
 }
@@ -29,9 +31,9 @@ export interface ComingUpPreferences {
 
 export const defaultComingUpPreferences: ComingUpPreferences = { filters: [], hideNames: false }
 
-/** Enough for a few weeks without opening the app; the widget drops past days itself. */
-const MAX_ITEMS = 20
-const DAYS_AHEAD = 60
+/** Two months ahead; the widget scrolls and drops past days itself. */
+const MAX_ITEMS = 40
+const DAYS_AHEAD = 62
 
 /**
  * Builds the widget snapshot from the agenda. With `hideNames` (chosen by the
@@ -60,18 +62,20 @@ export function buildComingUpSnapshot(
     .map((item): ComingUpWidgetItem => {
       const kind = agendaFilterFor(item.kind)
       const text = options.describe(item)
+      const kindLabel = options.genericTitle(kind)
       return options.hideNames
-        ? { date: item.date, title: options.genericTitle(kind), kind, personId: text.personId }
+        ? { date: item.date, title: kindLabel, kind, kindLabel, personId: text.personId }
         : {
             date: item.date,
             title: text.title,
             detail: text.detail || undefined,
             kind,
+            kindLabel,
             personId: text.personId,
           }
     })
   return {
-    version: 1,
+    version: 2,
     generatedAt: options.now,
     heading: options.heading,
     empty: options.empty,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import {
   ArrowLeft,
   Bell,
@@ -28,11 +28,11 @@ import {
   UserRoundCheck,
   UserRoundPlus,
 } from '@lucide/vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import AddAgendaItemDialog from '@/components/AddAgendaItemDialog.vue'
-import AddConnectionDialog, { type NewPersonInput } from '@/components/AddConnectionDialog.vue'
+import AddConnectionDialog, { type ConnectionDraft } from '@/components/AddConnectionDialog.vue'
 import AgendaCard from '@/components/AgendaCard.vue'
 import AddNoteDialog from '@/components/AddNoteDialog.vue'
 import CirclePickerDialog from '@/components/CirclePickerDialog.vue'
@@ -56,14 +56,26 @@ import type { PartialDate, Person, RelationshipRole } from '@/domain/model'
 import { connectedPersonId } from '@/domain/relationships'
 import { personTimeline, type TimelineEntry } from '@/domain/timeline'
 import { useKindyStore } from '@/stores/kindy'
+import { useToastStore } from '@/stores/toast'
 
 type Tab = 'overview' | 'notes' | 'connections' | 'timeline'
 
 const props = defineProps<{ id: string }>()
 const store = useKindyStore()
+const toast = useToastStore()
 const router = useRouter()
 const { locale, t } = useI18n()
-const activeTab = ref<Tab>('overview')
+const route = useRoute()
+const tabs: Tab[] = ['overview', 'notes', 'connections', 'timeline']
+/** The open tab lives in the address (?tab=), so Back returns to it. */
+const activeTab = computed<Tab>(() => {
+  const tab = route.query.tab
+  return typeof tab === 'string' && tabs.includes(tab as Tab) ? (tab as Tab) : 'overview'
+})
+/** Switching tabs replaces the entry: Back leaves the profile, not the tab. */
+function openTab(tab: Tab): void {
+  void router.replace({ query: { ...route.query, tab: tab === 'overview' ? undefined : tab } })
+}
 const showCirclePicker = ref(false)
 const showAddConnection = ref(false)
 const showAddNote = ref(false)
@@ -83,15 +95,6 @@ const showAddDate = ref(false)
 const addDateError = ref<string>()
 /** Removing a date takes two taps: the first asks for confirmation. */
 const confirmingRemoval = ref<string>()
-
-const connectionError = ref<string>()
-
-watch(
-  () => props.id,
-  () => {
-    activeTab.value = 'overview'
-  },
-)
 
 const person = computed(() => store.personById(props.id))
 const notes = computed(() =>
@@ -346,23 +349,34 @@ async function saveCircles(circleIds: string[]): Promise<void> {
 }
 
 function openAddConnection(): void {
-  connectionError.value = undefined
   showAddConnection.value = true
 }
 
-async function addConnection(
-  input:
-    | { personId: string; role: RelationshipRole }
-    | { newPerson: NewPersonInput; role: RelationshipRole },
+const savingConnections = ref(false)
+
+/** Saves several connections at once; new names become real people (and Google contacts) first. */
+async function addConnections(
+  drafts: ConnectionDraft[],
+  options: { alsoForPartnerId?: string },
 ): Promise<void> {
+  savingConnections.value = true
   try {
-    // A new connection is always a real person: create them first, then link.
-    const personId =
-      'personId' in input ? input.personId : (await store.addPerson(input.newPerson)).id
-    await store.addConnection(props.id, personId, input.role)
+    const connections: Array<{ personId: string; role: RelationshipRole }> = []
+    for (const draft of drafts) {
+      if (!draft.role) continue
+      const personId =
+        draft.personId ?? (draft.newPerson && (await store.addPerson(draft.newPerson)).id)
+      if (personId) connections.push({ personId, role: draft.role })
+    }
+    const { added, skipped } = await store.addConnections(props.id, connections, options)
     showAddConnection.value = false
+    toast.show(
+      skipped && !added ? t('connections.exists') : t('connections.added', { count: added }, added),
+    )
   } catch {
-    connectionError.value = t('connections.exists')
+    toast.show(t('common.failed'), 'error')
+  } finally {
+    savingConnections.value = false
   }
 }
 
@@ -448,7 +462,7 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
         v-for="tab in ['overview', 'notes', 'connections', 'timeline'] as const"
         :key="tab"
         :class="{ active: activeTab === tab }"
-        @click="activeTab = tab"
+        @click="openTab(tab)"
       >
         {{ $t(`profile.${tab}`) }}
       </button>
@@ -665,7 +679,7 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
         </div>
         <p v-if="notes[0]">{{ notes[0].body }}</p>
         <p v-else class="muted">{{ $t('profile.noNotes') }}</p>
-        <button class="inline-action" @click="activeTab = 'notes'">
+        <button class="inline-action" @click="openTab('notes')">
           <NotebookPen :size="18" />
           {{
             notes.length ? $t('profile.allNotes', { count: notes.length }) : $t('profile.toNotes')
@@ -737,7 +751,7 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
         v-if="diagramRelationships.length"
         :person="person"
         :relationships="diagramRelationships"
-        @select="router.push(`/people/${$event}`)"
+        @select="router.push({ path: `/people/${$event}`, query: { tab: 'connections' } })"
       />
       <p v-else class="empty-copy">{{ $t('profile.noConnections') }}</p>
 
@@ -854,9 +868,10 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
       :open="showAddConnection"
       :subject="person"
       :candidates="store.people"
-      :error="connectionError"
+      :relationships="store.data?.relationships ?? []"
+      :busy="savingConnections"
       @close="showAddConnection = false"
-      @save="addConnection"
+      @save="addConnections"
     />
     <AddAgendaItemDialog
       :open="showAddDate"

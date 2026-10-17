@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
+/** Tabs replace each other in history, like a native app: Back never walks through tabs. */
 const items = [
   { to: '/', label: 'nav.home', icon: House },
   { to: '/people', label: 'nav.people', icon: UserRound },
@@ -18,6 +19,7 @@ const items = [
       v-for="item in items"
       :key="item.to"
       :to="item.to"
+      replace
       class="bottom-nav__item"
       exact-active-class="bottom-nav__item--active"
     >

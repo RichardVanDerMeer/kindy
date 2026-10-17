@@ -53,6 +53,48 @@ const people = [
   person('me', 'Richard van der Meer', { isSelf: true }),
 ]
 
+describe('calendar copies of contact dates', () => {
+  const emma = person('emma', 'Emma Jansen', { birthDate: { year: 2014, month: 10, day: 17 } })
+
+  it('leaves out birthday calendars, whatever the phone calls them', () => {
+    for (const calendarName of ['Verjaardagen', 'Birthdays', 'Contacts']) {
+      expect(
+        suggestCalendarLinks([event('b', 'Emma Jansen', { calendarName })], [emma], []),
+      ).toEqual([])
+    }
+  })
+
+  it('leaves out an all-day event on the person’s birthday or anniversary', () => {
+    const birthday = event('b', 'Emma Jansen jarig', {
+      allDay: true,
+      startsAt: Date.UTC(2026, 9, 17),
+    })
+    const anniversary = event('a', 'Emma Jansen 10 jaar getrouwd', {
+      allDay: true,
+      startsAt: Date.UTC(2026, 4, 20),
+    })
+    const known = [
+      {
+        id: 'w',
+        type: 'wedding-anniversary' as const,
+        title: 'wedding',
+        date: { year: 2016, month: 5, day: 20 },
+        personIds: ['emma'],
+        source: 'google' as const,
+      },
+    ]
+    expect(suggestCalendarLinks([birthday, anniversary], [emma], [], known)).toEqual([])
+  })
+
+  it('still suggests a party on another day', () => {
+    const party = event('p', 'Feestje Emma Jansen', {
+      allDay: true,
+      startsAt: Date.UTC(2026, 9, 18),
+    })
+    expect(suggestCalendarLinks([party], [emma], [])).toHaveLength(1)
+  })
+})
+
 describe('calendar suggestions', () => {
   it('matches guests by email and unambiguous first names in the title', () => {
     const suggestions = suggestCalendarLinks(

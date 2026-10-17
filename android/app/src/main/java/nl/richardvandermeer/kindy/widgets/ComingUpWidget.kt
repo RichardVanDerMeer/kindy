@@ -10,12 +10,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
-import androidx.glance.LocalSize
+import androidx.glance.ImageProvider
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
+import androidx.glance.appwidget.lazy.LazyColumn
+import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
@@ -57,6 +59,7 @@ class ComingUpWidget : GlanceAppWidget() {
 
 private val Surface = Color(0xFFFFFDFD)
 private val RowSurface = Color(0xFFF6F1FF)
+private val BirthdayAccent = Color(0xFFC2410C)
 private val Heading = Color(0xFF6633EE)
 private val Ink = Color(0xFF1C0752)
 private val Muted = Color(0xFF70669A)
@@ -64,15 +67,10 @@ private const val DAY_MS = 86_400_000.0
 
 @Composable
 private fun WidgetContent(context: Context, snapshot: ComingUpSnapshot?, fallback: String) {
-    val height = LocalSize.current.height
-    val maxRows = when {
-        height >= 280.dp -> 5
-        height >= 180.dp -> 3
-        else -> 2
-    }
     val today = dayKey(Calendar.getInstance())
-    // The snapshot may be a few days old; past days are dropped here.
-    val items = snapshot?.items.orEmpty().filter { it.date >= today }.take(maxRows)
+    // The snapshot may be a few days old; past days are dropped here. The list
+    // scrolls, so the next two months fit at any widget size.
+    val items = snapshot?.items.orEmpty().filter { it.date >= today }
     val muted = TextStyle(color = ColorProvider(Muted), fontSize = 13.sp)
 
     Column(
@@ -80,34 +78,56 @@ private fun WidgetContent(context: Context, snapshot: ComingUpSnapshot?, fallbac
             .fillMaxSize()
             .background(Surface)
             .cornerRadius(24.dp)
-            .padding(12.dp)
-            .clickable(actionStartActivity(openIntent(context, "kindy://upcoming"))),
+            .padding(12.dp),
     ) {
         Text(
             text = snapshot?.heading ?: context.getString(R.string.app_name),
             style = TextStyle(color = ColorProvider(Heading), fontSize = 15.sp, fontWeight = FontWeight.Bold),
+            modifier = GlanceModifier.clickable(actionStartActivity(openIntent(context, "kindy://upcoming"))),
         )
         Spacer(GlanceModifier.height(6.dp))
         when {
             snapshot == null -> Text(fallback, style = muted)
             items.isEmpty() -> Text(snapshot.empty, style = muted)
-            else -> items.forEach { item ->
-                ItemRow(context, snapshot, item)
-                Spacer(GlanceModifier.height(6.dp))
+            else -> LazyColumn {
+                items(items) { item ->
+                    Column {
+                        ItemRow(context, snapshot, item, today)
+                        Spacer(GlanceModifier.height(6.dp))
+                    }
+                }
             }
         }
     }
 }
 
+/** A small picture per type, so the kind of day is clear at a glance. */
+private fun kindIcon(kind: String): String = when (kind) {
+    "birthday" -> "🎂"
+    "wedding" -> "💍"
+    "work" -> "💼"
+    "memorial" -> "🕯️"
+    "appointment" -> "📅"
+    "reminder" -> "🔔"
+    else -> "⭐"
+}
+
 @Composable
-private fun ItemRow(context: Context, snapshot: ComingUpSnapshot, item: ComingUpItem) {
+private fun ItemRow(context: Context, snapshot: ComingUpSnapshot, item: ComingUpItem, today: String) {
     val locale = Locale.forLanguageTag(snapshot.locale)
     val date = parseDay(item.date)
     val link = item.personId?.let { "kindy://people/$it" } ?: "kindy://upcoming"
+    // A birthday today is a party: confetti behind the row.
+    val festive = item.kind == "birthday" && item.date == today
+    val rowBackground = if (festive) {
+        GlanceModifier.background(ImageProvider(R.drawable.widget_confetti))
+    } else {
+        GlanceModifier.background(RowSurface)
+    }
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
-            .background(RowSurface)
+            .then(rowBackground)
             .cornerRadius(14.dp)
             .padding(horizontal = 8.dp, vertical = 6.dp)
             .clickable(actionStartActivity(openIntent(context, link))),
@@ -128,16 +148,31 @@ private fun ItemRow(context: Context, snapshot: ComingUpSnapshot, item: ComingUp
         }
         Spacer(GlanceModifier.width(8.dp))
         Column {
+            val kind = listOfNotNull(
+                "${kindIcon(item.kind)} ${item.kindLabel.orEmpty()}".trim(),
+                relativeDay(date, snapshot, locale),
+            ).joinToString(" · ")
             Text(
-                text = relativeDay(date, snapshot, locale),
+                text = kind,
                 style = TextStyle(color = ColorProvider(Muted), fontSize = 11.sp),
                 maxLines = 1,
             )
             Text(
-                text = item.title,
-                style = TextStyle(color = ColorProvider(Ink), fontSize = 13.sp, fontWeight = FontWeight.Medium),
+                text = if (festive) "🎉 ${item.title}" else item.title,
+                style = TextStyle(
+                    color = ColorProvider(if (item.kind == "birthday") BirthdayAccent else Ink),
+                    fontSize = 13.sp,
+                    fontWeight = if (item.kind == "birthday") FontWeight.Bold else FontWeight.Medium,
+                ),
                 maxLines = 1,
             )
+            item.detail?.let {
+                Text(
+                    text = it,
+                    style = TextStyle(color = ColorProvider(Muted), fontSize = 11.sp),
+                    maxLines = 1,
+                )
+            }
         }
     }
 }

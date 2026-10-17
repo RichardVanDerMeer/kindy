@@ -7,6 +7,11 @@ internal data class ComingUpItem(
     val date: String,
     val title: String,
     val personId: String?,
+    /** "birthday", "wedding", "work", "memorial", "appointment", "reminder" or "other". */
+    val kind: String,
+    /** The type in words, shown above the title. */
+    val kindLabel: String?,
+    val detail: String?,
 )
 
 internal data class ComingUpSnapshot(
@@ -57,6 +62,9 @@ internal class ComingUpSnapshotStore(context: Context) {
                         date = date,
                         title = item.getString("title"),
                         personId = item.optString("personId").takeIf { it.matches(PERSON_ID) },
+                        kind = item.optString("kind", "other"),
+                        kindLabel = item.optString("kindLabel").takeIf { it.isNotBlank() },
+                        detail = item.optString("detail").takeIf { it.isNotBlank() },
                     )
                 },
             )

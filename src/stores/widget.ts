@@ -1,7 +1,7 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
-import { describeAgendaItem, primaryPerson } from '@/composables/agendaText'
+import { describeAgendaItem, firstName, primaryPerson } from '@/composables/agendaText'
 import type { AgendaFilter } from '@/domain/agenda'
 import type { Person } from '@/domain/model'
 import {
@@ -55,10 +55,17 @@ export const useWidgetStore = defineStore('widget', () => {
         const people = item.personIds
           .map((id) => kindy.personById(id))
           .filter((person): person is Person => Boolean(person))
-        return {
-          ...describeAgendaItem(item, people, t, locale),
-          personId: primaryPerson(people)?.id,
+        const primary = primaryPerson(people)
+        const text = describeAgendaItem(item, people, t, locale)
+        // A birthday says the age straight away: "Emma turns 12".
+        if (item.kind === 'birthday' && item.years && primary) {
+          return {
+            title: t('widget.turns', { name: firstName(primary), count: item.years }),
+            detail: '',
+            personId: primary.id,
+          }
         }
+        return { ...text, personId: primary?.id }
       },
       genericTitle: (filter: AgendaFilter) => t(`widget.generic.${filter}`),
       heading: t('upcoming.title'),

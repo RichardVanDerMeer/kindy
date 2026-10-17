@@ -1,5 +1,5 @@
 import { normalizeText } from './duplicates'
-import type { CalendarLink, EntityId, Person } from './model'
+import type { CalendarLink, EntityId, ImportantEvent, PartialDate, Person } from './model'
 
 /** One occurrence of an appointment in the phone's calendar. */
 export interface DeviceCalendarEvent {
@@ -45,10 +45,54 @@ function containsSequence(haystack: string[], needle: string[]): boolean {
  * name, or a first name of at least three letters that only one person has.
  * Appointments already linked or ignored are not suggested again.
  */
+/**
+ * Calendars that only repeat dates from the address book (Google's
+ * "Birthdays", or one named like it on another phone).
+ */
+const DATE_CALENDAR_NAME =
+  /birthday|verjaardag|anniversar|jubilea|jubileum|contacts|contactpersonen/i
+
+/** True for an event from a calendar that only repeats address-book dates. */
+export function fromDateCalendar(event: DeviceCalendarEvent): boolean {
+  return Boolean(event.calendarName && DATE_CALENDAR_NAME.test(event.calendarName))
+}
+
+/** The day an event falls on; all-day events are stored as UTC midnight. */
+function eventDay(event: DeviceCalendarEvent): { month: number; day: number } {
+  const date = new Date(event.startsAt)
+  return event.allDay
+    ? { month: date.getUTCMonth() + 1, day: date.getUTCDate() }
+    : { month: date.getMonth() + 1, day: date.getDate() }
+}
+
+function sameDay(date: PartialDate | undefined, day: { month: number; day: number }): boolean {
+  return Boolean(date && date.month === day.month && date.day === day.day)
+}
+
+/**
+ * True for a calendar copy of a date Kindy already knows from the contact:
+ * an all-day event on that person's birthday, wedding day or anniversary.
+ */
+function repeatsKnownDate(
+  event: DeviceCalendarEvent,
+  personIds: EntityId[],
+  people: Person[],
+  knownDates: ImportantEvent[],
+): boolean {
+  if (!event.allDay) return false
+  const day = eventDay(event)
+  return personIds.some(
+    (personId) =>
+      sameDay(people.find((person) => person.id === personId)?.birthDate, day) ||
+      knownDates.some((known) => known.personIds.includes(personId) && sameDay(known.date, day)),
+  )
+}
+
 export function suggestCalendarLinks(
   events: DeviceCalendarEvent[],
   people: Person[],
   links: CalendarLink[],
+  knownDates: ImportantEvent[] = [],
 ): LinkSuggestion[] {
   const candidates = people.filter((person) => !person.isSelf && !person.deletedAt)
   const byEmail = new Map<string, EntityId>()
@@ -66,6 +110,7 @@ export function suggestCalendarLinks(
   const suggestions: LinkSuggestion[] = []
   for (const event of events) {
     if (links.some((link) => sameOccurrence(link, event))) continue
+    if (fromDateCalendar(event)) continue
 
     const fromAttendees = new Set(
       event.attendeeEmails
@@ -83,7 +128,8 @@ export function suggestCalendarLinks(
       .map((person) => person.id)
 
     const personIds = [...new Set([...fromAttendees, ...fromTitle])]
-    if (personIds.length) {
+    // Birthdays and anniversaries come from Google Contacts; a calendar copy would show twice.
+    if (personIds.length && !repeatsKnownDate(event, personIds, people, knownDates)) {
       suggestions.push({ event, personIds, reason: fromAttendees.size ? 'attendee' : 'title' })
     }
   }

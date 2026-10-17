@@ -22,6 +22,33 @@ const router = useRouter()
 // Keeps the home-screen widget up to date for as long as the app runs.
 useWidgetStore()
 
+const tabRoots = new Set(['/', '/people', '/circles', '/upcoming'])
+
+/**
+ * Android's Back, as in native apps: close an open sheet first, then go back
+ * one screen; from another tab return to Home; on Home leave the app.
+ */
+function handleBack(): void {
+  const sheets = document.querySelectorAll<HTMLElement>('.dialog-backdrop')
+  const sheet = sheets[sheets.length - 1]
+  if (sheet) {
+    // Sheets close on a tap on their backdrop.
+    sheet.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    return
+  }
+  if (route.path === '/') {
+    void CapacitorApp.minimizeApp()
+    return
+  }
+  if (tabRoots.has(route.path)) {
+    void router.replace('/')
+    return
+  }
+  // Opened straight from a widget or link: there is nothing in the app to go back to.
+  if (window.history.state?.back) router.back()
+  else void router.replace('/')
+}
+
 /** Widget taps arrive as kindy:// links; unknown links are ignored. */
 function openDeepLink(url: string | undefined): void {
   const target = url ? routeForDeepLink(url) : null
@@ -32,6 +59,7 @@ const { t } = useI18n()
 onMounted(async () => {
   if (Capacitor.isNativePlatform()) {
     void CapacitorApp.addListener('appUrlOpen', (event) => openDeepLink(event.url))
+    void CapacitorApp.addListener('backButton', handleBack)
     void CapacitorApp.getLaunchUrl().then((launch) => openDeepLink(launch?.url))
   }
   await security.initialize()

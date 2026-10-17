@@ -7,7 +7,7 @@ import { buildAgenda, calendarDay } from '@/domain/agenda'
 import type { AgendaDraft } from '@/domain/agendaDraft'
 import { createBackup, isWorthBackingUp, readBackup } from '@/domain/backup'
 import { sameOccurrence, suggestCalendarLinks, type DeviceCalendarEvent } from '@/domain/calendar'
-import { createConnection } from '@/domain/connections'
+import { createConnection, isChildRole } from '@/domain/connections'
 import { enqueueSync, importedContactDates, managedContactFields } from '@/domain/contactSync'
 import { normalizeContactLabel } from '@/domain/contactLabels'
 import { applyRemoteContact } from '@/domain/incomingContacts'
@@ -264,7 +264,12 @@ export const useKindyStore = defineStore('kindy', () => {
   /** Appointments in the phone's calendar that look related to someone in Kindy. */
   const calendarSuggestions = computed(() =>
     data.value
-      ? suggestCalendarLinks(calendarEvents.value, people.value, data.value.calendarLinks)
+      ? suggestCalendarLinks(
+          calendarEvents.value,
+          people.value,
+          data.value.calendarLinks,
+          data.value.events,
+        )
       : [],
   )
   /** From a week ago up to (not including) the same day next year; views narrow it further. */
@@ -769,6 +774,40 @@ export const useKindyStore = defineStore('kindy', () => {
         createConnection(crypto.randomUUID(), subjectId, otherId, role, draft.relationships),
       )
     })
+  }
+
+  /**
+   * Adds several connections at once. With `alsoForPartnerId`, children are
+   * also linked to that partner. Connections that already exist are skipped.
+   */
+  async function addConnections(
+    subjectId: string,
+    connections: Array<{ personId: string; role: RelationshipRole }>,
+    options: { alsoForPartnerId?: string } = {},
+  ): Promise<{ added: number; skipped: number }> {
+    let added = 0
+    let skipped = 0
+    await mutate((draft) => {
+      const link = (from: string, to: string, role: RelationshipRole): boolean => {
+        try {
+          draft.relationships.push(
+            createConnection(crypto.randomUUID(), from, to, role, draft.relationships),
+          )
+          return true
+        } catch {
+          return false
+        }
+      }
+      for (const connection of connections) {
+        if (link(subjectId, connection.personId, connection.role)) added += 1
+        else skipped += 1
+        const partnerId = options.alsoForPartnerId
+        if (partnerId && partnerId !== connection.personId && isChildRole(connection.role)) {
+          link(partnerId, connection.personId, connection.role)
+        }
+      }
+    })
+    return { added, skipped }
   }
 
   async function removeConnection(relationshipId: string): Promise<void> {
@@ -1442,6 +1481,7 @@ export const useKindyStore = defineStore('kindy', () => {
     saveCircle,
     setPersonCircles,
     addConnection,
+    addConnections,
     removeConnection,
     setCircleMembers,
     addNote,
