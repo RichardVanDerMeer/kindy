@@ -377,32 +377,43 @@ class KindyGoogleContactsPlugin : Plugin() {
             .addOnFailureListener { error -> call.reject("Unable to revoke Google access", error) }
     }
 
-    @Suppress("DEPRECATION")
+    /**
+     * The authorisation result often carries no account details, so Kindy asks
+     * Google's userinfo endpoint which account the token belongs to. Its stable
+     * id ("sub") keeps each account's data apart (ADR 0005).
+     */
     private fun resolveAuthorization(call: PluginCall, result: AuthorizationResult) {
         val token = result.accessToken
         if (token.isNullOrBlank()) {
             call.reject("Google authorization returned no access token")
             return
         }
-        accessToken = token
-        val googleAccount = result.toGoogleSignInAccount()
-        val accountId = googleAccount?.id
-        val email = googleAccount?.email
-        if (accountId.isNullOrBlank() || email.isNullOrBlank()) {
-            // Kindy keeps data per account; without an id the data cannot be kept apart.
-            accessToken = null
-            call.reject("Google did not return the account", "NO_ACCOUNT")
-            return
+        execute {
+            try {
+                val response = send("GET", USERINFO_URL, token, null)
+                val info = if (response.status in 200..299) JSObject(response.body) else null
+                val accountId = info?.optString("sub").orEmpty()
+                val email = info?.optString("email").orEmpty()
+                if (accountId.isBlank() || email.isBlank()) {
+                    accessToken = null
+                    call.reject("Google did not return the account", "NO_ACCOUNT")
+                    return@execute
+                }
+                accessToken = token
+                account = Account(email, GOOGLE_ACCOUNT_TYPE)
+                call.resolve(
+                    JSObject().apply {
+                        put("provider", "google")
+                        put("providerAccountId", accountId)
+                        put("email", email)
+                        put("displayName", info?.optString("name")?.takeIf { it.isNotBlank() } ?: email)
+                    },
+                )
+            } catch (error: Exception) {
+                accessToken = null
+                call.reject("Unable to read the Google account", error)
+            }
         }
-        account = googleAccount.account
-        call.resolve(
-            JSObject().apply {
-                put("provider", "google")
-                put("providerAccountId", accountId)
-                put("email", email)
-                put("displayName", googleAccount.displayName ?: email)
-            },
-        )
     }
 
     private fun requestedScopes(): List<Scope> = listOf(
@@ -478,6 +489,7 @@ private const val AUTHORIZATION_REQUEST_CODE = 9412
 private const val GOOGLE_ACCOUNT_TYPE = "com.google"
 private const val CONTACTS_SCOPE = "https://www.googleapis.com/auth/contacts"
 private const val PEOPLE_API_URL = "https://people.googleapis.com/v1"
+private const val USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 private const val DRIVE_APPDATA_SCOPE = "https://www.googleapis.com/auth/drive.appdata"
 private const val DRIVE_API_URL = "https://www.googleapis.com/drive/v3"
 private const val DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3"
