@@ -46,7 +46,6 @@ import { runContactSync } from '@/infrastructure/sync/contactSyncRunner'
 import { i18n } from '@/locales'
 
 const repository = getKindyRepository()
-const WRITE_BACK_KEY = 'kindy.google.writeBack'
 const SYNC_TOKEN_KEY = 'kindy.google.syncToken'
 const LAST_BACKUP_KEY = 'kindy.backup.lastAt'
 const DAY = 86_400_000
@@ -141,14 +140,6 @@ function samePartialDate(left?: PartialDate, right?: PartialDate): boolean {
   return left?.year === right?.year && left?.month === right?.month && left?.day === right?.day
 }
 
-function readWriteBack(): boolean {
-  try {
-    return localStorage.getItem(WRITE_BACK_KEY) !== 'off'
-  } catch {
-    return true
-  }
-}
-
 /**
  * The People API sync token per Google account. Losing it only costs one full
  * read of the address book, so local storage is enough.
@@ -198,7 +189,6 @@ export const useKindyStore = defineStore('kindy', () => {
   const error = ref<string | null>(null)
   const data = ref<KindyData | null>(null)
   const today = ref(calendarDay(new Date()))
-  const googleWriteBack = ref(readWriteBack())
   const googleSyncing = ref(false)
   const lastBackupAt = ref(readLastBackup())
   const backupState = ref<BackupState>('idle')
@@ -394,7 +384,6 @@ export const useKindyStore = defineStore('kindy', () => {
         repository,
         gateway,
         labels: { death },
-        onlyCreates: !googleWriteBack.value,
       })
     } catch {
       // The queue is kept; a later change or reconnect retries it.
@@ -432,23 +421,6 @@ export const useKindyStore = defineStore('kindy', () => {
     await syncGoogle()
   }
 
-  /** Explicitly copies a Kindy-only person to Google Contacts. */
-  async function saveToGoogle(personId: string): Promise<void> {
-    await mutate((draft) => queueContactCreate(draft, personId))
-    void syncGoogle()
-  }
-
-  async function setGoogleWriteBack(enabled: boolean): Promise<void> {
-    googleWriteBack.value = enabled
-    try {
-      localStorage.setItem(WRITE_BACK_KEY, enabled ? 'on' : 'off')
-    } catch {
-      // Applies for this session.
-    }
-    // Changes made while write-back was off waited in the queue and are sent now.
-    if (enabled) void syncGoogle()
-  }
-
   async function lock(): Promise<void> {
     data.value = null
     initialized.value = false
@@ -461,11 +433,8 @@ export const useKindyStore = defineStore('kindy', () => {
     scheduleBackup()
   }
 
-  async function addPerson(input: {
-    givenName: string
-    familyName?: string
-    saveToGoogle?: boolean
-  }): Promise<Person> {
+  /** People live in Google Contacts (ADR 0004): every new person becomes a contact. */
+  async function addPerson(input: { givenName: string; familyName?: string }): Promise<Person> {
     const now = Date.now()
     const givenName = input.givenName.trim()
     const familyName = input.familyName?.trim() || undefined
@@ -484,9 +453,9 @@ export const useKindyStore = defineStore('kindy', () => {
     }
     await mutate((draft) => {
       draft.people.push(person)
-      if (input.saveToGoogle) queueContactCreate(draft, person.id)
+      queueContactCreate(draft, person.id)
     })
-    if (input.saveToGoogle) void syncGoogle()
+    void syncGoogle()
     return person
   }
 
@@ -1288,7 +1257,6 @@ export const useKindyStore = defineStore('kindy', () => {
     favoritePeople,
     favoriteCircles,
     agenda,
-    googleWriteBack,
     googleSyncing,
     googleLinked,
     pendingSyncCount,
@@ -1321,8 +1289,6 @@ export const useKindyStore = defineStore('kindy', () => {
     syncGoogle,
     contactSyncStatus,
     retryContactSync,
-    saveToGoogle,
-    setGoogleWriteBack,
     backupNow,
     findCloudBackup,
     restoreFromCloud,

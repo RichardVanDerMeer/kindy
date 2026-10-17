@@ -123,29 +123,8 @@ const nameOrders: NameOrder[] = ['given-first', 'family-first']
       <div class="settings-card__copy">
         <div class="settings-title-row">
           <h2>{{ $t('settings.googleContacts') }}</h2>
-          <span class="status-pill">{{ $t('settings.readOnly') }}</span>
         </div>
         <p>{{ $t('settings.googleContactsHint') }}</p>
-      </div>
-      <ul class="privacy-list">
-        <li>{{ $t('settings.googleReadOnly') }}</li>
-        <li>{{ $t('settings.googleChoose') }}</li>
-        <li>{{ $t('settings.googleLocalCopy') }}</li>
-      </ul>
-      <div class="settings-subrow">
-        <span class="settings-subrow__copy">
-          <strong>{{ $t('settings.writeBack') }}</strong>
-          <small>{{ $t('settings.writeBackHint') }}</small>
-        </span>
-        <button
-          class="switch"
-          role="switch"
-          :aria-checked="store.googleWriteBack"
-          :aria-label="$t('settings.writeBack')"
-          @click="store.setGoogleWriteBack(!store.googleWriteBack)"
-        >
-          <span />
-        </button>
       </div>
       <div v-if="store.googleLinked" class="settings-card__footer settings-card__footer--sync">
         <CloudUpload :size="17" />
@@ -165,7 +144,7 @@ const nameOrders: NameOrder[] = ['given-first', 'family-first']
         class="button button--ghost settings-wide-button"
         @click="router.push({ path: '/people', query: { import: 'google' } })"
       >
-        {{ $t('settings.connectGoogle') }}
+        {{ store.googleLinked ? $t('google.importFromGoogle') : $t('settings.connectGoogle') }}
       </button>
     </article>
 

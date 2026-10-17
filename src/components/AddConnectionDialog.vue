@@ -10,14 +10,12 @@ import PersonPicker from './PersonPicker.vue'
 export interface NewPersonInput {
   givenName: string
   familyName?: string
-  saveToGoogle: boolean
 }
 
 const props = defineProps<{
   open: boolean
   subject: Person
   candidates: Person[]
-  googleAvailable: boolean
   error?: string
 }>()
 const emit = defineEmits<{
@@ -54,7 +52,6 @@ function startNewPerson(name: string): void {
   newPerson.value = {
     givenName,
     familyName: rest.join(' ') || undefined,
-    saveToGoogle: props.googleAvailable,
   }
   selected.value = []
 }
@@ -121,10 +118,6 @@ function submit(): void {
               <input v-model="newPerson.familyName" autocomplete="off" />
             </label>
           </div>
-          <label v-if="googleAvailable" class="check-field">
-            <input v-model="newPerson.saveToGoogle" type="checkbox" />
-            <span>{{ $t('contactSync.alsoSave') }}</span>
-          </label>
         </template>
         <template v-else>
           <p class="dialog-question">{{ $t('connections.choosePerson') }}</p>

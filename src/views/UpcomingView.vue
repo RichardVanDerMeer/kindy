@@ -24,11 +24,6 @@ const { t, locale } = useI18n()
 const selected = ref<Set<AgendaFilter>>(new Set())
 const showEarlier = ref(false)
 const showAdd = ref(false)
-const syncedPersonIds = computed(() =>
-  store.googleWriteBack
-    ? (store.data?.externalIdentities ?? []).map((identity) => identity.personId)
-    : [],
-)
 
 const addError = ref<string>()
 
@@ -156,7 +151,6 @@ const groups = computed(() => {
     <AddAgendaItemDialog
       :open="showAdd"
       :candidates="store.people"
-      :synced-person-ids="syncedPersonIds"
       :error="addError"
       @close="showAdd = false"
       @save="save"

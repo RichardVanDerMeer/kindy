@@ -686,10 +686,6 @@ h2 {
   line-height: 1.4;
 }
 
-.privacy-list--dialog {
-  padding-block: var(--space-4);
-}
-
 .contacts-loading {
   display: flex;
   min-height: 230px;
@@ -757,6 +753,29 @@ h2 {
   border: 2px solid #d5cce1;
   border-radius: 9px;
   color: transparent;
+}
+
+.contact-picker-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.contact-picker-row--linked {
+  opacity: 0.6;
+}
+
+.contact-picker-tag {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #f4f4f6;
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .contact-picker-row--selected .selection-check {
@@ -1289,7 +1308,6 @@ button.connection-person:focus-visible {
 }
 
 .settings-card__footer,
-.privacy-list,
 .settings-wide-button {
   grid-column: 1 / -1;
 }
@@ -1359,15 +1377,6 @@ button.connection-person:focus-visible {
   font-size: 0.68rem;
   font-weight: 800;
   white-space: nowrap;
-}
-
-.privacy-list {
-  display: grid;
-  gap: var(--space-2);
-  margin: 0;
-  padding: var(--space-3) 0 var(--space-2) 22px;
-  color: var(--color-text-muted);
-  font-size: 0.84rem;
 }
 
 .settings-wide-button {
@@ -2509,25 +2518,9 @@ button.section-link {
   white-space: nowrap;
 }
 
-.sync-badge--synced {
-  background: #e0f4e9;
-  color: #267453;
-}
-
-.sync-badge--pending {
-  background: #fff4d6;
-  color: #86620c;
-}
-
 .sync-badge--failed {
   background: #fbe4e8;
   color: var(--color-danger);
-}
-
-.sync-badge--local {
-  box-shadow: inset 0 0 0 1px rgba(124, 77, 255, 0.35);
-  background: transparent;
-  color: var(--color-primary-strong);
 }
 
 .card-heading-row--wrap {
@@ -2538,16 +2531,6 @@ button.section-link {
 
 .card-heading-row--wrap h2 {
   margin: 0;
-}
-
-.sync-hint {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 0 var(--space-3);
-  color: #267453;
-  font-size: 0.86rem;
-  font-weight: 600;
 }
 
 .check-field {
@@ -2773,21 +2756,6 @@ button.section-link {
 
 .field-label svg {
   color: var(--color-primary);
-}
-
-.edit-sync-hint,
-.edit-local-hint {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: calc(var(--space-2) * -1) 0 var(--space-4);
-  color: var(--color-text-muted);
-  font-size: 0.84rem;
-}
-
-.edit-local-hint {
-  margin-top: 0;
-  color: #86620c;
 }
 
 .list-input {
@@ -3297,34 +3265,6 @@ button.contact-action {
 .detail-row--ended strong,
 .detail-row--ended > span {
   color: var(--color-text-muted);
-}
-
-.save-to-google {
-  display: grid;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-}
-
-.save-to-google > div {
-  padding: var(--space-3);
-  border-radius: var(--radius-small);
-  background: #f6f1ff;
-}
-
-.save-to-google > div:last-child {
-  background: #f4f4f6;
-}
-
-.save-to-google strong {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.save-to-google p {
-  margin: 4px 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.88rem;
 }
 
 /* Memos: a checkbox to tick them off; finished memos stay, marked as done */

@@ -19,7 +19,6 @@ import {
   MessageCircle,
   Navigation,
   NotebookPen,
-  CloudOff,
   Pencil,
   Phone,
   Plus,
@@ -53,7 +52,7 @@ import { isCurrentJob, jobLabel, jobsOf } from '@/domain/jobs'
 import { divorceEnding } from '@/domain/marriage'
 import { mapsUrl } from '@/domain/maps'
 import { socialDisplay, socialUrl } from '@/domain/social'
-import type { PartialDate, Person, RelationshipRole, SyncField } from '@/domain/model'
+import type { PartialDate, Person, RelationshipRole } from '@/domain/model'
 import { connectedPersonId } from '@/domain/relationships'
 import { personTimeline, type TimelineEntry } from '@/domain/timeline'
 import { useKindyStore } from '@/stores/kindy'
@@ -85,10 +84,6 @@ const addDateError = ref<string>()
 /** Removing a date takes two taps: the first asks for confirmation. */
 const confirmingRemoval = ref<string>()
 
-/** For linked people: fields the user chose to keep in Kindy only. */
-function localOnly(field: SyncField): boolean {
-  return Boolean(person.value?.syncExclusions?.includes(field)) && store.linkedToGoogle(props.id)
-}
 const connectionError = ref<string>()
 
 watch(
@@ -264,11 +259,6 @@ const pastTimeline = computed(() => {
   )
 })
 const removableKinds = new Set(['married', 'anniversary', 'divorced', 'custom'])
-const syncedPersonIds = computed(() =>
-  store.googleWriteBack
-    ? (store.data?.externalIdentities ?? []).map((identity) => identity.personId)
-    : [],
-)
 
 async function removeTimelineEvent(entry: TimelineEntry): Promise<void> {
   if (confirmingRemoval.value !== entry.id) {
@@ -503,10 +493,7 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
 
         <div v-if="person.birthDate && !person.isDeceased" class="detail-row">
           <Cake :size="20" />
-          <span
-            >{{ $t('profile.birthDate') }}
-            <CloudOff v-if="localOnly('birthday')" :size="13" :aria-label="$t('edit.localOnly')"
-          /></span>
+          <span>{{ $t('profile.birthDate') }}</span>
           <strong>
             {{ formatDate(person.birthDate) }}
             <small v-if="age !== null" class="detail-meta">{{
@@ -587,10 +574,7 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
         <div v-if="showContact" class="contact-details">
           <div v-for="point in phones" :key="point.id" class="detail-row detail-row--contact">
             <Phone :size="20" />
-            <span
-              >{{ contactLabel(point.label) }}
-              <CloudOff v-if="localOnly('phones')" :size="13" :aria-label="$t('edit.localOnly')"
-            /></span>
+            <span>{{ contactLabel(point.label) }}</span>
             <strong class="detail-with-actions">
               <a :href="`tel:${point.value}`">{{ point.value }}</a>
               <span v-if="!person.isDeceased" class="detail-actions">
@@ -618,10 +602,7 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
 
           <div v-for="point in emails" :key="point.id" class="detail-row detail-row--contact">
             <Mail :size="20" />
-            <span
-              >{{ contactLabel(point.label) }}
-              <CloudOff v-if="localOnly('emails')" :size="13" :aria-label="$t('edit.localOnly')"
-            /></span>
+            <span>{{ contactLabel(point.label) }}</span>
             <strong class="detail-with-actions">
               <a :href="`mailto:${point.value}`">{{ point.value }}</a>
             </strong>
@@ -873,7 +854,6 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
       :open="showAddConnection"
       :subject="person"
       :candidates="store.people"
-      :google-available="store.googleLinked"
       :error="connectionError"
       @close="showAddConnection = false"
       @save="addConnection"
@@ -881,7 +861,6 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
     <AddAgendaItemDialog
       :open="showAddDate"
       :candidates="store.people"
-      :synced-person-ids="syncedPersonIds"
       :kinds="['birthday', 'wedding', 'divorce', 'death', 'custom', 'memo', 'appointment']"
       :initial-person-ids="[person.id]"
       :error="addDateError"

@@ -6,7 +6,6 @@ import {
   CalendarClock,
   CalendarPlus,
   ChevronRight,
-  CloudUpload,
   Flower2,
   Heart,
   HeartCrack,
@@ -22,8 +21,6 @@ import PersonPicker from './PersonPicker.vue'
 const props = defineProps<{
   open: boolean
   candidates: Person[]
-  /** People whose dates are also written to Google Contacts. */
-  syncedPersonIds: string[]
   /** Skip the choice screen, e.g. "plan appointment" from a profile. */
   initialKind?: AgendaDraftKind
   initialPersonIds?: string[]
@@ -90,12 +87,6 @@ const options = computed(() =>
   ),
 )
 
-/** Birthdays, wedding days and deaths are also written to linked Google contacts. */
-const writesToGoogle = computed(
-  () =>
-    (kind.value === 'birthday' || kind.value === 'wedding' || kind.value === 'death') &&
-    personIds.value.some((personId) => props.syncedPersonIds.includes(personId)),
-)
 const maxPeople = computed(() => {
   if (kind.value === 'wedding' || kind.value === 'divorce') return 2
   if (kind.value === 'appointment' || kind.value === 'custom') return undefined
@@ -300,9 +291,6 @@ function submit(): void {
           <PersonPicker v-model="personIds" :candidates="pickable" :max="maxPeople" />
 
           <p v-if="error" class="form-error" role="alert">{{ error }}</p>
-          <p v-if="writesToGoogle" class="sync-hint">
-            <CloudUpload :size="16" /> {{ $t('contactSync.willSave') }}
-          </p>
           <div class="dialog__actions">
             <button type="button" class="button button--ghost" @click="emit('close')">
               {{ $t('people.cancel') }}

@@ -83,7 +83,6 @@ async function plan(draft: AgendaDraft): Promise<void> {
     <AddAgendaItemDialog
       :open="showPlan"
       :candidates="store.people"
-      :synced-person-ids="[]"
       initial-kind="appointment"
       :initial-person-ids="[personId]"
       :error="planError"

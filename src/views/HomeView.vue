@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ChevronRight, CloudDownload, Search } from '@lucide/vue'
+import { ChevronRight, ContactRound, Search } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -83,15 +83,19 @@ function subtitle(person: Person): string {
     </template>
 
     <template v-else>
-      <article v-if="!store.people.length" class="card welcome-card">
-        <h2>{{ $t('backup.welcomeTitle') }}</h2>
-        <p>{{ $t('backup.welcomeText') }}</p>
-        <button class="button button--primary settings-wide-button" @click="showRestore = true">
-          <CloudDownload :size="18" /> {{ $t('backup.restoreFromDrive') }}
+      <!-- People come only from Google Contacts (ADR 0004), so connecting is the first step. -->
+      <article v-if="!store.googleLinked" class="card welcome-card">
+        <h2>{{ $t('home.connectTitle') }}</h2>
+        <p>{{ $t('home.connectText') }}</p>
+        <button
+          class="button button--primary settings-wide-button"
+          @click="router.push({ path: '/people', query: { import: 'google' } })"
+        >
+          <ContactRound :size="18" /> {{ $t('home.connectButton') }}
         </button>
-        <RouterLink class="section-link welcome-card__alt" to="/people">
-          {{ $t('backup.startFresh') }}
-        </RouterLink>
+        <button class="section-link welcome-card__alt" @click="showRestore = true">
+          {{ $t('home.connectRestore') }}
+        </button>
       </article>
       <RestoreBackupDialog
         :open="showRestore"
