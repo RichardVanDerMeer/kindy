@@ -13,6 +13,7 @@ import type { Person } from '@/domain/model'
 import { listName, sortByName } from '@/domain/names'
 import { useKindyStore } from '@/stores/kindy'
 import { usePreferencesStore } from '@/stores/preferences'
+import { useToastStore } from '@/stores/toast'
 import type { ExternalContactsConnection, ExternalContactSnapshot } from '@/domain/ports'
 
 const store = useKindyStore()
@@ -20,6 +21,7 @@ const preferences = usePreferencesStore()
 const router = useRouter()
 const route = useRoute()
 const { locale, t } = useI18n()
+const toast = useToastStore()
 const query = ref('')
 const filter = ref<'all' | 'favorites' | string>(
   typeof route.query.circle === 'string'
@@ -75,13 +77,23 @@ function chooseGoogle(): void {
   showGoogleContacts.value = true
 }
 
+const importing = ref(false)
+
 async function importGoogleContacts(
   connection: ExternalContactsConnection,
   contacts: ExternalContactSnapshot[],
 ): Promise<void> {
-  await store.importExternalContacts(connection, contacts)
-  showGoogleContacts.value = false
-  await router.replace({ name: 'people', query: {} })
+  importing.value = true
+  try {
+    const { imported } = await store.importExternalContacts(connection, contacts)
+    toast.show(t('google.imported', { count: imported }, imported))
+    showGoogleContacts.value = false
+    await router.replace({ name: 'people', query: {} })
+  } catch {
+    toast.show(t('common.failed'), 'error')
+  } finally {
+    importing.value = false
+  }
 }
 </script>
 
@@ -163,6 +175,7 @@ async function importGoogleContacts(
     />
     <GoogleContactsDialog
       :open="showGoogleContacts"
+      :busy="importing"
       @close="showGoogleContacts = false"
       @import="importGoogleContacts"
     />

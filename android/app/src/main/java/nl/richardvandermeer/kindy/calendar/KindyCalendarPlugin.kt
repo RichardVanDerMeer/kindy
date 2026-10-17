@@ -96,8 +96,11 @@ class KindyCalendarPlugin : Plugin() {
                 context.contentResolver.query(
                     builder.build(),
                     projection,
-                    null,
-                    null,
+                    // Google's birthday calendar repeats the birthdays Kindy already
+                    // reads from Google Contacts, so its events would show twice.
+                    "${CalendarContract.Instances.OWNER_ACCOUNT} IS NULL OR " +
+                        "${CalendarContract.Instances.OWNER_ACCOUNT} NOT LIKE ?",
+                    arrayOf(CONTACTS_BIRTHDAY_CALENDAR_OWNER),
                     "${CalendarContract.Instances.BEGIN} ASC",
                 )?.use { cursor ->
                     while (cursor.moveToNext()) {
@@ -239,3 +242,6 @@ class KindyCalendarPlugin : Plugin() {
 }
 
 private const val CALENDAR_ALIAS = "calendar"
+
+/** Owner of Google's generated "Birthdays" calendar (also with an "addressbook" prefix). */
+private const val CONTACTS_BIRTHDAY_CALENDAR_OWNER = "%#contacts@group.v.calendar.google.com"

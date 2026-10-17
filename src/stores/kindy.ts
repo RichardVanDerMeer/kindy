@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, ref, toRaw } from 'vue'
 import { defineStore } from 'pinia'
 import { App as CapacitorApp } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
@@ -51,6 +51,7 @@ import {
 } from '@/infrastructure/sync/contactChangesRunner'
 import { runContactSync } from '@/infrastructure/sync/contactSyncRunner'
 import { i18n } from '@/locales'
+import { useToastStore } from '@/stores/toast'
 
 /** Stands in while no Google account is connected: Kindy has no data then (ADR 0005). */
 const closedRepository = new Proxy({} as KindyRepository, {
@@ -315,6 +316,14 @@ export const useKindyStore = defineStore('kindy', () => {
     today.value = calendarDay(new Date())
   }
 
+  /** Stored changes run one after another, so a later change never lands first. */
+  let pendingWrite: Promise<void> = Promise.resolve()
+  /** Changes still being written; with syncing and backups this drives the activity bar. */
+  const writing = ref(0)
+  const busy = computed(
+    () => writing.value > 0 || googleSyncing.value || backupState.value === 'running',
+  )
+
   /**
    * Applies a change to a plain snapshot and stores it. This rewrites the full
    * dataset, which is fine for the current demo phase; targeted repository
@@ -323,10 +332,26 @@ export const useKindyStore = defineStore('kindy', () => {
    * structured-cloned into storage.
    */
   async function mutate(change: (draft: KindyData) => void): Promise<void> {
-    const next = await repository.getData()
+    if (!data.value) throw new Error('Kindy is not initialized')
+    // The screen updates at once; storing follows in order, in the background
+    // of the user's next action. `toRaw` because Vue proxies cannot be cloned.
+    const next = structuredClone(toRaw(data.value))
     change(next)
-    await repository.replaceData(next)
-    await refresh()
+    data.value = next
+    today.value = calendarDay(new Date())
+    const write = pendingWrite.then(() => repository.replaceData(next))
+    pendingWrite = write.catch(() => undefined)
+    writing.value += 1
+    try {
+      await write
+    } catch (caught) {
+      // Show what is really stored again, and say so: a lost change must never be silent.
+      await refresh()
+      useToastStore().show(i18n.global.t('common.saveFailed'), 'error')
+      throw caught
+    } finally {
+      writing.value -= 1
+    }
     scheduleBackup()
   }
 
@@ -378,6 +403,7 @@ export const useKindyStore = defineStore('kindy', () => {
       throw new AccountMismatchError()
     }
     clearTimeout(backupTimer)
+    await pendingWrite
     await repository.replaceData(backup.data)
     await refresh()
     rememberBackup(backup.createdAt || Date.now())
@@ -430,6 +456,8 @@ export const useKindyStore = defineStore('kindy', () => {
     if (googleSyncing.value || !initialized.value) return
     if (typeof navigator !== 'undefined' && !navigator.onLine) return
     googleSyncing.value = true
+    // The sync reads the stored data, so changes still being written go first.
+    await pendingWrite
     const gateway = getGoogleContactsGateway()
     const death = i18n.global.t('contactSync.deathEvent')
     try {
@@ -584,11 +612,12 @@ export const useKindyStore = defineStore('kindy', () => {
   }
 
   async function toggleFavorite(personId: string): Promise<void> {
-    const person = await repository.getPerson(personId)
-    if (!person) return
-    person.isFavorite = !person.isFavorite
-    person.updatedAt = Date.now()
-    await savePerson(person)
+    await mutate((draft) => {
+      const person = draft.people.find((candidate) => candidate.id === personId)
+      if (!person) return
+      person.isFavorite = !person.isFavorite
+      person.updatedAt = Date.now()
+    })
   }
 
   async function importExternalContacts(
@@ -598,6 +627,7 @@ export const useKindyStore = defineStore('kindy', () => {
     if (!data.value) throw new Error('Kindy is not initialized')
     // Contacts of another account never enter this account's data.
     if (connection.providerAccountId !== account.value?.id) throw new AccountMismatchError()
+    await pendingWrite
     // Read a plain repository snapshot here. Pinia wraps `data` deeply in Vue
     // proxies, which cannot be passed to structuredClone in the browser.
     const next = await repository.getData()
@@ -630,6 +660,8 @@ export const useKindyStore = defineStore('kindy', () => {
         displayName: contact.displayName,
         givenName: contact.givenName,
         familyName: contact.familyName,
+        // The contact's Google photo is the starting profile photo.
+        photoRef: contact.photoUrl,
         birthDate: dates.birthDate,
         deathDate: dates.deathDate,
         isFavorite: false,
@@ -1378,6 +1410,7 @@ export const useKindyStore = defineStore('kindy', () => {
     error,
     data,
     account,
+    busy,
     connectGoogle,
     disconnectGoogle,
     wipeAccount,

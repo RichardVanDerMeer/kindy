@@ -1,4 +1,9 @@
-import { importedContactDates, managedContactFields, writtenAfterSync } from './contactSync'
+import {
+  importedContactDates,
+  managedContactFields,
+  uploadablePhoto,
+  writtenAfterSync,
+} from './contactSync'
 import type {
   ContactPoint,
   EntityId,
@@ -108,12 +113,24 @@ export function applyRemoteContact(
     if (person.deletedAt === identity.remoteDeletedAt) delete person.deletedAt
     delete identity.remoteDeletedAt
   }
-  if (!restored && snapshot.etag && snapshot.etag === identity.etag) return false
+  if (!restored && snapshot.etag && snapshot.etag === identity.etag) {
+    // People imported before Kindy used Google photos get theirs on the next read.
+    if (person.photoRef || !snapshot.photoUrl) return false
+    person.photoRef = snapshot.photoUrl
+    person.updatedAt = options.now
+    return true
+  }
 
   const blocked = protectedFields(data, person.id)
   const applied = incomingFields.filter((field) => !blocked.has(field))
   const dates = importedContactDates(snapshot.birthday, snapshot.events, options.labels.deathLabels)
   const written = identity.writtenFields
+
+  // Google's photo follows Google, until the user picks a photo in Kindy:
+  // that one is stored as data and sent to Google instead.
+  if (!blocked.has('photo') && !uploadablePhoto(person.photoRef)) {
+    person.photoRef = snapshot.photoUrl
+  }
 
   if (applied.includes('name')) {
     person.displayName = snapshot.displayName

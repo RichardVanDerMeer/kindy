@@ -8,7 +8,7 @@ import { normalizeText } from '@/domain/duplicates'
 import { getGoogleContactsGateway } from '@/infrastructure/contacts/googleContactsGateway'
 import { useKindyStore } from '@/stores/kindy'
 
-const props = defineProps<{ open: boolean }>()
+const props = defineProps<{ open: boolean; busy?: boolean }>()
 const emit = defineEmits<{
   close: []
   import: [connection: ExternalContactsConnection, contacts: ExternalContactSnapshot[]]
@@ -201,7 +201,8 @@ function submit(): void {
           </div>
           <button
             class="button button--primary settings-wide-button"
-            :disabled="!selected.size"
+            :disabled="!selected.size || busy"
+            :aria-busy="busy || undefined"
             @click="submit"
           >
             {{ $t('google.importSelected', { count: selected.size }) }}

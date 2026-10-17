@@ -9,6 +9,7 @@ import AgendaEditors from '@/components/AgendaEditors.vue'
 import BottomNavigation from '@/components/BottomNavigation.vue'
 import ConnectScreen from '@/components/ConnectScreen.vue'
 import LockScreen from '@/components/LockScreen.vue'
+import ToastHost from '@/components/ToastHost.vue'
 import { useKindyStore } from '@/stores/kindy'
 import { routeForDeepLink } from '@/router/deepLinks'
 import { useSecurityStore } from '@/stores/security'
@@ -46,6 +47,11 @@ async function unlock(): Promise<void> {
 <template>
   <div class="app-background" aria-hidden="true"></div>
   <main class="app-shell">
+    <div
+      class="activity-bar"
+      :class="{ 'activity-bar--active': store.busy }"
+      aria-hidden="true"
+    ></div>
     <div v-if="!security.ready" class="center-state" role="status">
       <span class="loading-orbit"></span>
       <p>{{ t('security.checking') }}</p>
@@ -62,8 +68,13 @@ async function unlock(): Promise<void> {
         {{ t('common.retry') }}
       </button>
     </div>
-    <RouterView v-else />
+    <RouterView v-else v-slot="{ Component }">
+      <Transition name="view" mode="out-in">
+        <component :is="Component" />
+      </Transition>
+    </RouterView>
     <AgendaEditors v-if="store.initialized" />
+    <ToastHost />
     <BottomNavigation
       v-if="
         security.ready && !security.locked && store.account && route.meta.showNavigation !== false

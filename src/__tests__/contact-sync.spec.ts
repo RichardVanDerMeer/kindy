@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { applyRemoteContact } from '@/domain/incomingContacts'
+
 import {
   allSyncFields,
   enqueueSync,
@@ -965,5 +967,34 @@ describe('reading changes from Google', () => {
       birthdays: [{ month: 5, day: 5 }],
     })
     expect(repository.current.externalIdentities[0]?.etag).toBe('e6')
+  })
+})
+
+describe('Google photos', () => {
+  const options = { labels: incomingLabels, now: 9, newId: () => 'new-id' }
+
+  it('shows the contact’s Google photo when Kindy has none', () => {
+    const next = linkedRobin()
+    const link = next.externalIdentities[0]!
+    applyRemoteContact(next, link, snapshot({ photoUrl: 'https://photos.test/robin' }), options)
+    expect(next.people[0]?.photoRef).toBe('https://photos.test/robin')
+  })
+
+  it('follows a new Google photo, also when nothing else changed', () => {
+    const next = linkedRobin()
+    const link = { ...next.externalIdentities[0]!, etag: 'e5' }
+    next.externalIdentities[0] = link
+    expect(
+      applyRemoteContact(next, link, snapshot({ photoUrl: 'https://photos.test/robin' }), options),
+    ).toBe(true)
+    expect(next.people[0]?.photoRef).toBe('https://photos.test/robin')
+  })
+
+  it('keeps a photo picked in Kindy, which goes to Google instead', () => {
+    const next = linkedRobin()
+    next.people[0]!.photoRef = 'data:image/png;base64,AAAA'
+    const link = next.externalIdentities[0]!
+    applyRemoteContact(next, link, snapshot({ photoUrl: 'https://photos.test/robin' }), options)
+    expect(next.people[0]?.photoRef).toBe('data:image/png;base64,AAAA')
   })
 })

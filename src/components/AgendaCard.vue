@@ -7,6 +7,7 @@ import {
   CalendarClock,
   CalendarHeart,
   Check,
+  ChevronRight,
   Gift,
   Heart,
   Mail,
@@ -196,6 +197,13 @@ function open(): void {
           </small>
           <small v-if="item.done" class="agenda-card__done">{{ t('upcoming.doneLabel') }}</small>
         </span>
+        <!-- Compact cards only open the person: the arrow says so. -->
+        <ChevronRight
+          v-if="compact && primary && item.kind !== 'reminder' && !milestone"
+          class="agenda-card__open"
+          :size="18"
+          aria-hidden="true"
+        />
       </button>
       <RouterLink
         v-if="giftInRow && primary"
@@ -252,7 +260,8 @@ function open(): void {
         :href="`tel:${phone}`"
         :aria-label="t('upcoming.call', { name: primary && firstName(primary) })"
       >
-        <Phone :size="18" />
+        <Phone :size="17" />
+        <span>{{ t('upcoming.actionCall') }}</span>
       </a>
       <a
         v-if="whatsappNumber"
@@ -262,7 +271,8 @@ function open(): void {
         rel="noopener"
         :aria-label="t('upcoming.whatsapp', { name: primary && firstName(primary) })"
       >
-        <MessageCircle :size="18" />
+        <MessageCircle :size="17" />
+        <span>WhatsApp</span>
       </a>
       <a
         v-if="email"
@@ -270,7 +280,8 @@ function open(): void {
         :href="`mailto:${email}`"
         :aria-label="t('upcoming.email', { name: primary && firstName(primary) })"
       >
-        <Mail :size="18" />
+        <Mail :size="17" />
+        <span>{{ t('upcoming.actionEmail') }}</span>
       </a>
     </div>
   </article>

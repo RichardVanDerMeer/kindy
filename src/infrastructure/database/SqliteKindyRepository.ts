@@ -1,6 +1,7 @@
 import {
   CapacitorSQLite,
   SQLiteConnection,
+  type capSQLiteSet,
   type SQLiteDBConnection,
 } from '@capacitor-community/sqlite'
 
@@ -41,6 +42,9 @@ function optionalString(value: unknown): string | undefined {
 function optionalNumber(value: unknown): number | undefined {
   return value === null || value === undefined ? undefined : Number(value)
 }
+
+/** Statements per native call when writing; large enough to make bridge calls rare. */
+const FLUSH_SIZE = 500
 
 function rows(result: { values?: unknown[] }): SqlRow[] {
   return (result.values ?? []) as SqlRow[]
@@ -404,9 +408,11 @@ export class SqliteKindyRepository implements KindyRepository {
          DELETE FROM people;`,
         false,
       )
-      for (const person of data.people) await this.writePerson(person)
+      const set: capSQLiteSet[] = []
+      for (const person of data.people) this.writePerson(person, set)
       for (const identity of data.externalIdentities) {
-        await db.run(
+        this.add(
+          set,
           'INSERT INTO external_identities(id,person_id,provider,provider_account_id,provider_resource_id,etag,last_synced_at,remote_deleted_at,written_fields_json) VALUES(?,?,?,?,?,?,?,?,?)',
           [
             identity.id,
@@ -419,11 +425,11 @@ export class SqliteKindyRepository implements KindyRepository {
             identity.remoteDeletedAt ?? null,
             identity.writtenFields ? JSON.stringify(identity.writtenFields) : null,
           ],
-          false,
         )
       }
       for (const circle of data.circles) {
-        await db.run(
+        this.add(
+          set,
           'INSERT INTO circles(id,name,description,color_token,icon_key,background_ref,is_favorite,is_archived) VALUES(?,?,?,?,?,?,?,?)',
           [
             circle.id,
@@ -435,11 +441,11 @@ export class SqliteKindyRepository implements KindyRepository {
             Number(circle.isFavorite),
             Number(circle.isArchived),
           ],
-          false,
         )
       }
       for (const membership of data.memberships) {
-        await db.run(
+        this.add(
+          set,
           'INSERT INTO circle_memberships(circle_id,person_id,role,started_on,ended_on) VALUES(?,?,?,?,?)',
           [
             membership.circleId,
@@ -448,11 +454,11 @@ export class SqliteKindyRepository implements KindyRepository {
             membership.startedOn ?? null,
             membership.endedOn ?? null,
           ],
-          false,
         )
       }
       for (const relationship of data.relationships) {
-        await db.run(
+        this.add(
+          set,
           'INSERT INTO relationships(id,from_person_id,to_person_id,type,custom_label,from_person_label,to_person_label,from_person_role,to_person_role,started_on,ended_on,note) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
           [
             relationship.id,
@@ -468,11 +474,11 @@ export class SqliteKindyRepository implements KindyRepository {
             relationship.endedOn ?? null,
             relationship.note ?? null,
           ],
-          false,
         )
       }
       for (const note of data.notes) {
-        await db.run(
+        this.add(
+          set,
           'INSERT INTO notes(id,body,occurred_at,is_pinned,created_at,updated_at) VALUES(?,?,?,?,?,?)',
           [
             note.id,
@@ -482,18 +488,17 @@ export class SqliteKindyRepository implements KindyRepository {
             note.createdAt,
             note.updatedAt,
           ],
-          false,
         )
         for (const personId of note.personIds) {
-          await db.run(
-            'INSERT INTO note_people(note_id,person_id) VALUES(?,?)',
-            [note.id, personId],
-            false,
-          )
+          this.add(set, 'INSERT INTO note_people(note_id,person_id) VALUES(?,?)', [
+            note.id,
+            personId,
+          ])
         }
       }
       for (const event of data.events) {
-        await db.run(
+        this.add(
+          set,
           'INSERT INTO important_events(id,type,title,event_year,event_month,event_day,source,external_source_ref) VALUES(?,?,?,?,?,?,?,?)',
           [
             event.id,
@@ -505,18 +510,17 @@ export class SqliteKindyRepository implements KindyRepository {
             event.source,
             event.externalSourceRef ?? null,
           ],
-          false,
         )
         for (const personId of event.personIds) {
-          await db.run(
-            'INSERT INTO event_people(event_id,person_id) VALUES(?,?)',
-            [event.id, personId],
-            false,
-          )
+          this.add(set, 'INSERT INTO event_people(event_id,person_id) VALUES(?,?)', [
+            event.id,
+            personId,
+          ])
         }
       }
       for (const interaction of data.interactions) {
-        await db.run(
+        this.add(
+          set,
           'INSERT INTO interactions(id,type,occurred_at,location,summary) VALUES(?,?,?,?,?)',
           [
             interaction.id,
@@ -525,18 +529,17 @@ export class SqliteKindyRepository implements KindyRepository {
             interaction.location ?? null,
             interaction.summary ?? null,
           ],
-          false,
         )
         for (const personId of interaction.personIds) {
-          await db.run(
-            'INSERT INTO interaction_people(interaction_id,person_id) VALUES(?,?)',
-            [interaction.id, personId],
-            false,
-          )
+          this.add(set, 'INSERT INTO interaction_people(interaction_id,person_id) VALUES(?,?)', [
+            interaction.id,
+            personId,
+          ])
         }
       }
       for (const reminder of data.reminders) {
-        await db.run(
+        this.add(
+          set,
           'INSERT INTO reminders(id,person_id,note_id,event_id,interaction_id,title,description,local_date_time,timezone,recurrence_json,notification_offsets_json,is_cancelled) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
           [
             reminder.id,
@@ -552,11 +555,11 @@ export class SqliteKindyRepository implements KindyRepository {
             JSON.stringify(reminder.notificationOffsetsMinutes),
             Number(reminder.isCancelled),
           ],
-          false,
         )
       }
       for (const occurrence of data.reminderOccurrences) {
-        await db.run(
+        this.add(
+          set,
           'INSERT INTO reminder_occurrences(id,reminder_id,due_at,state,snoozed_until) VALUES(?,?,?,?,?)',
           [
             occurrence.id,
@@ -565,11 +568,11 @@ export class SqliteKindyRepository implements KindyRepository {
             occurrence.state,
             occurrence.snoozedUntil ?? null,
           ],
-          false,
         )
       }
       for (const operation of data.syncQueue) {
-        await db.run(
+        this.add(
+          set,
           'INSERT INTO sync_operations(id,person_id,kind,fields_json,state,attempts,last_error,updated_at) VALUES(?,?,?,?,?,?,?,?)',
           [
             operation.id,
@@ -581,11 +584,11 @@ export class SqliteKindyRepository implements KindyRepository {
             operation.lastError ?? null,
             operation.updatedAt,
           ],
-          false,
         )
       }
       for (const wish of data.wishes) {
-        await db.run(
+        this.add(
+          set,
           'INSERT INTO wish_items(id,person_id,title,url,note,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',
           [
             wish.id,
@@ -597,11 +600,11 @@ export class SqliteKindyRepository implements KindyRepository {
             wish.createdAt,
             wish.updatedAt,
           ],
-          false,
         )
       }
       for (const link of data.calendarLinks) {
-        await db.run(
+        this.add(
+          set,
           'INSERT INTO calendar_links(id,event_id,calendar_id,title,starts_at,ends_at,all_day,location,status,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
           [
             link.id,
@@ -616,17 +619,16 @@ export class SqliteKindyRepository implements KindyRepository {
             link.createdBy,
             link.createdAt,
           ],
-          false,
         )
         for (const personId of link.personIds) {
-          await db.run(
-            'INSERT INTO calendar_link_people(link_id,person_id) VALUES(?,?)',
-            [link.id, personId],
-            false,
-          )
+          this.add(set, 'INSERT INTO calendar_link_people(link_id,person_id) VALUES(?,?)', [
+            link.id,
+            personId,
+          ])
         }
       }
-      await this.rebuildSearchIndex(data)
+      this.rebuildSearchIndex(data, set)
+      await this.flush(set)
       await db.commitTransaction()
     } catch (error) {
       await db.rollbackTransaction()
@@ -652,9 +654,12 @@ export class SqliteKindyRepository implements KindyRepository {
     const db = this.requireDatabase()
     await db.beginTransaction()
     try {
-      await this.writePerson(person)
-      const data = await this.getData()
-      await this.rebuildSearchIndex(data)
+      const set: capSQLiteSet[] = []
+      this.writePerson(person, set)
+      await this.flush(set)
+      const index: capSQLiteSet[] = []
+      this.rebuildSearchIndex(await this.getData(), index)
+      await this.flush(index)
       await db.commitTransaction()
     } catch (error) {
       await db.rollbackTransaction()
@@ -746,9 +751,9 @@ export class SqliteKindyRepository implements KindyRepository {
     return (await this.listPeople()).filter((person) => ids.has(person.id))
   }
 
-  private async writePerson(person: Person): Promise<void> {
-    const db = this.requireDatabase()
-    await db.run(
+  private writePerson(person: Person, set: capSQLiteSet[]): void {
+    this.add(
+      set,
       `INSERT INTO people(id,display_name,given_name,middle_name,family_name,nickname,pronouns,photo_ref,is_self,is_favorite,is_archived,is_deceased,sync_exclusions_json,birth_year,birth_month,birth_day,death_year,death_month,death_day,memorial_note,about,jobs_json,how_we_met,created_at,updated_at,deleted_at)
        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET display_name=excluded.display_name,given_name=excluded.given_name,middle_name=excluded.middle_name,family_name=excluded.family_name,nickname=excluded.nickname,pronouns=excluded.pronouns,photo_ref=excluded.photo_ref,is_self=excluded.is_self,is_favorite=excluded.is_favorite,is_archived=excluded.is_archived,is_deceased=excluded.is_deceased,sync_exclusions_json=excluded.sync_exclusions_json,birth_year=excluded.birth_year,birth_month=excluded.birth_month,birth_day=excluded.birth_day,death_year=excluded.death_year,death_month=excluded.death_month,death_day=excluded.death_day,memorial_note=excluded.memorial_note,about=excluded.about,jobs_json=excluded.jobs_json,how_we_met=excluded.how_we_met,updated_at=excluded.updated_at,deleted_at=excluded.deleted_at`,
@@ -780,12 +785,12 @@ export class SqliteKindyRepository implements KindyRepository {
         person.updatedAt,
         person.deletedAt ?? null,
       ],
-      false,
     )
-    await db.run('DELETE FROM contact_points WHERE person_id = ?', [person.id], false)
-    await db.run('DELETE FROM person_details WHERE person_id = ?', [person.id], false)
+    this.add(set, 'DELETE FROM contact_points WHERE person_id = ?', [person.id])
+    this.add(set, 'DELETE FROM person_details WHERE person_id = ?', [person.id])
     for (const point of person.contactPoints) {
-      await db.run(
+      this.add(
+        set,
         'INSERT INTO contact_points(id,person_id,kind,label,value,normalized_value,is_primary,source,source_field_id) VALUES(?,?,?,?,?,?,?,?,?)',
         [
           point.id,
@@ -798,11 +803,11 @@ export class SqliteKindyRepository implements KindyRepository {
           point.source,
           point.sourceFieldId ?? null,
         ],
-        false,
       )
     }
     for (const detail of person.details) {
-      await db.run(
+      this.add(
+        set,
         'INSERT INTO person_details(id,person_id,definition_id,label,value_json,value_type,source,observed_at) VALUES(?,?,?,?,?,?,?,?)',
         [
           detail.id,
@@ -814,14 +819,12 @@ export class SqliteKindyRepository implements KindyRepository {
           detail.source,
           detail.observedAt ?? null,
         ],
-        false,
       )
     }
   }
 
-  private async rebuildSearchIndex(data: KindyData): Promise<void> {
-    const db = this.requireDatabase()
-    await db.run('DELETE FROM search_index', [], false)
+  private rebuildSearchIndex(data: KindyData, set: capSQLiteSet[]): void {
+    this.add(set, 'DELETE FROM search_index', [])
     for (const person of data.people.filter((candidate) => !candidate.deletedAt)) {
       const notes = data.notes
         .filter((note) => note.personIds.includes(person.id))
@@ -842,11 +845,26 @@ export class SqliteKindyRepository implements KindyRepository {
       ]
         .filter(Boolean)
         .join(' ')
-      await db.run(
-        'INSERT INTO search_index(entity_id,display_name,content) VALUES(?,?,?)',
-        [person.id, person.displayName, content],
-        false,
-      )
+      this.add(set, 'INSERT INTO search_index(entity_id,display_name,content) VALUES(?,?,?)', [
+        person.id,
+        person.displayName,
+        content,
+      ])
+    }
+  }
+
+  private add(set: capSQLiteSet[], statement: string, values: unknown[]): void {
+    set.push({ statement, values })
+  }
+
+  /**
+   * Sends collected statements in a few bridge calls instead of one per row:
+   * a call to the native plugin costs far more than the statement itself.
+   */
+  private async flush(set: capSQLiteSet[]): Promise<void> {
+    const db = this.requireDatabase()
+    for (let start = 0; start < set.length; start += FLUSH_SIZE) {
+      await db.executeSet(set.slice(start, start + FLUSH_SIZE), false)
     }
   }
 

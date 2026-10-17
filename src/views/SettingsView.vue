@@ -141,7 +141,7 @@ const nameOrders: NameOrder[] = ['given-first', 'family-first']
           v-if="store.pendingSyncCount"
           class="section-link"
           :disabled="store.googleSyncing"
-          @click="store.retryContactSync()"
+          v-async-click="() => store.retryContactSync()"
         >
           {{ $t('settings.syncNow') }}
         </button>
@@ -254,7 +254,7 @@ const nameOrders: NameOrder[] = ['given-first', 'family-first']
         <button
           class="button button--ghost"
           :disabled="store.backupState === 'running' || !store.people.length"
-          @click="store.backupNow()"
+          v-async-click="() => store.backupNow()"
         >
           {{ $t('backup.backupNow') }}
         </button>
