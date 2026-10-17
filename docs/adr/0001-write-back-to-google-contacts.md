@@ -1,6 +1,6 @@
 # ADR 0001 — Write selected fields back to Google Contacts
 
-- Status: accepted
+- Status: superseded by ADR 0004
 - Date: 2026-09-27
 
 ## Context

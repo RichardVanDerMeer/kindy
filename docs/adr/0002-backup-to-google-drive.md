@@ -1,6 +1,6 @@
 # ADR 0002 — Back up Kindy to the user's Google Drive
 
-- Status: accepted
+- Status: superseded by ADR 0004
 - Date: 2026-09-27
 
 ## Context
