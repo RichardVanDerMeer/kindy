@@ -83,15 +83,15 @@ function subtitle(person: Person): string {
     </template>
 
     <template v-else>
-      <!-- People come only from Google Contacts (ADR 0004), so connecting is the first step. -->
+      <!-- People come only from Google Contacts (ADR 0004): a new account starts with importing. -->
       <article v-if="!store.googleLinked" class="card welcome-card">
-        <h2>{{ $t('home.connectTitle') }}</h2>
-        <p>{{ $t('home.connectText') }}</p>
+        <h2>{{ $t('home.importTitle') }}</h2>
+        <p>{{ $t('home.importText', { email: store.account?.email }) }}</p>
         <button
           class="button button--primary settings-wide-button"
           @click="router.push({ path: '/people', query: { import: 'google' } })"
         >
-          <ContactRound :size="18" /> {{ $t('home.connectButton') }}
+          <ContactRound :size="18" /> {{ $t('google.importFromGoogle') }}
         </button>
         <button class="section-link welcome-card__alt" @click="showRestore = true">
           {{ $t('home.connectRestore') }}

@@ -33,6 +33,9 @@ export default {
     connectText:
       'Kindy works with your Google address book. Connect Google Contacts to bring in your people.',
     connectButton: 'Connect Google Contacts',
+    importTitle: 'Bring in your people',
+    importText: 'Choose which contacts from {email} you want in Kindy.',
+    connectPerAccount: 'Kindy keeps your data per Google account. Another account cannot see it.',
     connectRestore: 'Or restore a backup from Google Drive',
   },
   people: {
@@ -289,6 +292,27 @@ export default {
     developer: 'Development',
     resetDemo: 'Reset demo data',
     resetDemoHint: 'Restores the sample people, circles and dates.',
+  },
+  account: {
+    title: 'Google account',
+    connectedAs: 'Connected to {email}',
+    disconnect: 'Disconnect Google',
+    disconnectHint:
+      'Your data stays on this phone and in Google Drive. Connect the same account again to carry on.',
+    disconnectTitle: 'Disconnect {email}?',
+    disconnectPending:
+      'Nothing waiting for Google | 1 change will be sent when you connect again. | {count} changes will be sent when you connect again.',
+    disconnectConfirm: 'Disconnect',
+    wipe: 'Delete Kindy data',
+    wipeHint:
+      "Deletes this account's Kindy data from this phone. Your Google Contacts stay as they are.",
+    wipeTitle: 'Delete the Kindy data of {email}?',
+    wipeText:
+      'People, circles, notes, relationships, reminders and wishes of this account disappear from this phone. This cannot be undone. Kindy never deletes your Google Contacts.',
+    wipeDrive: 'Also delete the backup in Google Drive',
+    wipeDriveHint: 'Without this, you can restore from Google Drive later.',
+    wipeConfirm: 'Delete permanently',
+    failed: 'That did not work. Check your connection and try again.',
   },
   google: {
     title: 'Import Google Contacts',

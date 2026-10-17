@@ -2634,6 +2634,52 @@ button.section-link {
   text-align: center;
 }
 
+.settings-account {
+  margin-top: var(--space-2);
+  color: var(--color-text);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.settings-account-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.settings-account-actions .button {
+  flex: 1 1 auto;
+}
+
+.settings-account-actions .settings-note {
+  flex-basis: 100%;
+}
+
+/* No Google account connected: only the way in is shown (ADR 0005) */
+.connect-screen {
+  display: flex;
+  min-height: 100dvh;
+  justify-content: center;
+  flex-direction: column;
+  padding: var(--space-6) var(--space-4);
+}
+
+.connect-screen .brand {
+  align-self: center;
+}
+
+.connect-screen h1 {
+  margin: 0 0 var(--space-2);
+  font-size: 1.5rem;
+}
+
+.connect-screen .welcome-card small {
+  display: block;
+  margin-top: var(--space-4);
+}
+
 .welcome-card p {
   color: var(--color-text-muted);
 }

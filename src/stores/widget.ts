@@ -44,10 +44,11 @@ export const useWidgetStore = defineStore('widget', () => {
   const hideNames = computed(() => namesForcedHidden.value || preferences.value.hideNames)
 
   const snapshot = computed(() => {
-    if (!kindy.data) return null
+    // Without a Google account Kindy shows nothing, so the widget is emptied too (ADR 0005).
+    if (kindy.account && !kindy.data) return null
     const { t } = i18n.global
     const locale = i18n.global.locale.value
-    return buildComingUpSnapshot(kindy.agenda, {
+    return buildComingUpSnapshot(kindy.account ? kindy.agenda : [], {
       preferences: preferences.value,
       hideNames: hideNames.value,
       describe: (item) => {

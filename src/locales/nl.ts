@@ -33,6 +33,10 @@ export default {
     connectText:
       'Kindy werkt met je Google-adresboek. Verbind Google Contacts om je mensen binnen te halen.',
     connectButton: 'Google Contacts verbinden',
+    importTitle: 'Haal je mensen binnen',
+    importText: 'Kies welke contacten uit {email} je in Kindy wilt hebben.',
+    connectPerAccount:
+      'Kindy bewaart je gegevens per Google-account. Een ander account ziet ze niet.',
     connectRestore: 'Of herstel een back-up uit Google Drive',
   },
   people: {
@@ -288,6 +292,27 @@ export default {
     developer: 'Ontwikkeling',
     resetDemo: 'Demodata herstellen',
     resetDemoHint: 'Zet de voorbeeldmensen, kringen en datums terug.',
+  },
+  account: {
+    title: 'Google-account',
+    connectedAs: 'Gekoppeld met {email}',
+    disconnect: 'Google ontkoppelen',
+    disconnectHint:
+      'Je gegevens blijven op deze telefoon en in Google Drive. Koppel hetzelfde account opnieuw om verder te gaan.',
+    disconnectTitle: '{email} ontkoppelen?',
+    disconnectPending:
+      'Nog niet naar Google verstuurd: niets | 1 wijziging gaat mee zodra je opnieuw koppelt. | {count} wijzigingen gaan mee zodra je opnieuw koppelt.',
+    disconnectConfirm: 'Ontkoppelen',
+    wipe: 'Kindy-gegevens verwijderen',
+    wipeHint:
+      'Verwijdert de Kindy-gegevens van dit account van deze telefoon. Je Google Contacts blijven ongemoeid.',
+    wipeTitle: 'Kindy-gegevens van {email} verwijderen?',
+    wipeText:
+      'Mensen, kringen, notities, relaties, herinneringen en wensen van dit account verdwijnen van deze telefoon. Dit kan niet ongedaan worden. Je Google Contacts verwijdert Kindy nooit.',
+    wipeDrive: 'Ook de back-up in Google Drive verwijderen',
+    wipeDriveHint: 'Zonder dit vinkje kun je later terugzetten vanuit Google Drive.',
+    wipeConfirm: 'Definitief verwijderen',
+    failed: 'Dat is niet gelukt. Controleer je verbinding en probeer het opnieuw.',
   },
   google: {
     title: 'Google Contacts importeren',

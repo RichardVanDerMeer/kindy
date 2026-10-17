@@ -50,6 +50,12 @@ class NativeGoogleDriveBackupGateway implements CloudBackupGateway {
     await this.connect()
     return (await nativeGooglePlugin.downloadBackup({ fileId: id })).content
   }
+
+  async remove(): Promise<void> {
+    await this.connect()
+    const { file } = await nativeGooglePlugin.findBackup({ name: BACKUP_FILE_NAME })
+    if (file) await nativeGooglePlugin.deleteBackup({ fileId: file.id })
+  }
 }
 
 const PREVIEW_DRIVE_KEY = 'kindy.preview-drive-backup'
@@ -78,6 +84,14 @@ class PreviewDriveBackupGateway implements CloudBackupGateway {
     const stored = this.read()
     if (!stored) throw new Error('No preview backup')
     return stored.content
+  }
+
+  async remove(): Promise<void> {
+    try {
+      localStorage.removeItem(PREVIEW_DRIVE_KEY)
+    } catch {
+      // Nothing stored.
+    }
   }
 
   private read(): { modifiedAt: number; content: string } | null {

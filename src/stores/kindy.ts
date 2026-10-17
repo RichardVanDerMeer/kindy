@@ -24,12 +24,15 @@ import {
   type SyncField,
   type WishItem,
 } from '@/domain/model'
-import type {
-  CalendarPermission,
-  CloudBackupInfo,
-  DeviceCalendar,
-  ExternalContactsConnection,
-  ExternalContactSnapshot,
+import {
+  AccountMismatchError,
+  type CalendarPermission,
+  type CloudBackupInfo,
+  type DeviceCalendar,
+  type ExternalContactsConnection,
+  type ExternalContactSnapshot,
+  type KindyAccount,
+  type KindyRepository,
 } from '@/domain/ports'
 import { getDeviceCalendarGateway } from '@/infrastructure/calendar/deviceCalendarGateway'
 import {
@@ -37,7 +40,11 @@ import {
   NotConnectedError,
 } from '@/infrastructure/backup/googleDriveBackupGateway'
 import { getGoogleContactsGateway } from '@/infrastructure/contacts/googleContactsGateway'
-import { getKindyRepository } from '@/infrastructure/repositories/repository'
+import {
+  belongsToAccount,
+  openKindyRepository,
+  previewAccount,
+} from '@/infrastructure/repositories/repository'
 import {
   runIncomingContactSync,
   type SyncTokenStore,
@@ -45,16 +52,53 @@ import {
 import { runContactSync } from '@/infrastructure/sync/contactSyncRunner'
 import { i18n } from '@/locales'
 
-const repository = getKindyRepository()
+/** Stands in while no Google account is connected: Kindy has no data then (ADR 0005). */
+const closedRepository = new Proxy({} as KindyRepository, {
+  get() {
+    return () => Promise.reject(new Error('No Google account is connected'))
+  },
+})
+/** The open store of the connected account. */
+let repository: KindyRepository = closedRepository
 const SYNC_TOKEN_KEY = 'kindy.google.syncToken'
 const LAST_BACKUP_KEY = 'kindy.backup.lastAt'
+/** The connected Google account; "none" after an explicit disconnect. */
+const ACCOUNT_KEY = 'kindy.google.account'
+
+function readAccount(): KindyAccount | null {
+  try {
+    const stored = localStorage.getItem(ACCOUNT_KEY)
+    if (stored === null) {
+      // The browser preview connects its synthetic account until the user disconnects.
+      return import.meta.env.DEV && !Capacitor.isNativePlatform() ? previewAccount : null
+    }
+    if (stored === 'none') return null
+    const account = JSON.parse(stored) as Partial<KindyAccount>
+    return account.id && account.email ? { ...account, id: account.id, email: account.email } : null
+  } catch {
+    return null
+  }
+}
+
+function saveAccount(account: KindyAccount | null): void {
+  try {
+    localStorage.setItem(ACCOUNT_KEY, account ? JSON.stringify(account) : 'none')
+  } catch {
+    // Kindy asks to connect again on the next start.
+  }
+}
+
+/** The "last backup" time is kept per account, like the backup itself. */
+function lastBackupKey(account: KindyAccount | null): string {
+  return account ? `${LAST_BACKUP_KEY}.${account.id}` : LAST_BACKUP_KEY
+}
 const DAY = 86_400_000
 /** Wait for a quiet moment after changes, so a burst of edits makes one backup. */
 const BACKUP_DELAY = 30_000
 
-function readLastBackup(): number | null {
+function readLastBackup(account: KindyAccount | null): number | null {
   try {
-    const value = Number(localStorage.getItem(LAST_BACKUP_KEY))
+    const value = Number(localStorage.getItem(lastBackupKey(account)))
     return Number.isFinite(value) && value > 0 ? value : null
   } catch {
     return null
@@ -163,12 +207,10 @@ const syncTokens: SyncTokenStore = {
   },
 }
 
-/** Forgets every sync token, so the next run reads all contacts again. */
-function forgetSyncTokens(): void {
+/** Forgets the account's sync token, so the next run reads all its contacts again. */
+function forgetSyncTokens(account: KindyAccount): void {
   try {
-    for (const key of Object.keys(localStorage)) {
-      if (key.startsWith(`${SYNC_TOKEN_KEY}.`)) localStorage.removeItem(key)
-    }
+    localStorage.removeItem(`${SYNC_TOKEN_KEY}.${account.id}`)
   } catch {
     // Nothing stored.
   }
@@ -190,7 +232,8 @@ export const useKindyStore = defineStore('kindy', () => {
   const data = ref<KindyData | null>(null)
   const today = ref(calendarDay(new Date()))
   const googleSyncing = ref(false)
-  const lastBackupAt = ref(readLastBackup())
+  const account = ref<KindyAccount | null>(readAccount())
+  const lastBackupAt = ref(readLastBackup(account.value))
   const backupState = ref<BackupState>('idle')
   let backupTimer: ReturnType<typeof setTimeout> | undefined
   const calendarPermission = ref<CalendarPermission>('prompt')
@@ -230,9 +273,15 @@ export const useKindyStore = defineStore('kindy', () => {
 
   async function initialize(): Promise<void> {
     if (initialized.value || loading.value) return
+    const current = account.value
+    getGoogleContactsGateway().useAccount(current)
+    // Without an account there is no data to open; the app asks to connect.
+    if (!current) return
     loading.value = true
     error.value = null
     try {
+      repository = await openKindyRepository(current)
+      lastBackupAt.value = readLastBackup(current)
       await repository.initialize()
       await refresh()
       initialized.value = true
@@ -289,7 +338,7 @@ export const useKindyStore = defineStore('kindy', () => {
   function rememberBackup(at: number): void {
     lastBackupAt.value = at
     try {
-      localStorage.setItem(LAST_BACKUP_KEY, String(at))
+      localStorage.setItem(lastBackupKey(account.value), String(at))
     } catch {
       // Only the "last backup" label is affected.
     }
@@ -324,13 +373,17 @@ export const useKindyStore = defineStore('kindy', () => {
   async function restoreFromCloud(backupId: string): Promise<void> {
     const content = await getCloudBackupGateway().download(backupId)
     const backup = readBackup(content, KINDY_SCHEMA_VERSION)
+    // The backup comes from this account's Drive, but never load another account's data.
+    if (!account.value || !belongsToAccount(backup.data, account.value.id)) {
+      throw new AccountMismatchError()
+    }
     clearTimeout(backupTimer)
     await repository.replaceData(backup.data)
     await refresh()
     rememberBackup(backup.createdAt || Date.now())
     backupState.value = 'idle'
     // The token belongs to the replaced data: read every contact again.
-    forgetSyncTokens()
+    forgetSyncTokens(account.value)
     void syncGoogle({ pull: true })
   }
 
@@ -427,6 +480,77 @@ export const useKindyStore = defineStore('kindy', () => {
     await repository.close()
   }
 
+  /**
+   * Connects a Google account and opens its own Kindy data (ADR 0005). Only
+   * possible while no account is connected: switching is disconnect, then connect.
+   */
+  async function connectGoogle(): Promise<KindyAccount> {
+    if (account.value) throw new Error('A Google account is already connected')
+    const gateway = getGoogleContactsGateway()
+    gateway.useAccount(null)
+    const connection = await gateway.authorize()
+    if (!connection.email) throw new Error('Google did not return the account')
+    const next: KindyAccount = {
+      id: connection.providerAccountId,
+      email: connection.email,
+      displayName: connection.displayName,
+    }
+    gateway.useAccount(next)
+    account.value = next
+    saveAccount(next)
+    await initialize()
+    return next
+  }
+
+  /** Closes the account's data and shows nothing until an account is connected again. */
+  async function closeAccount(): Promise<void> {
+    clearTimeout(backupTimer)
+    data.value = null
+    initialized.value = false
+    await repository.close().catch(() => undefined)
+    repository = closedRepository
+    account.value = null
+    saveAccount(null)
+    getGoogleContactsGateway().useAccount(null)
+    lastBackupAt.value = null
+    backupState.value = 'idle'
+  }
+
+  /**
+   * Disconnects Google (ADR 0005, section 3). The account's data stays on the
+   * device and in Drive, including changes not yet sent to Google.
+   */
+  async function disconnectGoogle(): Promise<void> {
+    try {
+      await getGoogleContactsGateway().revoke()
+    } catch {
+      // Offline or already revoked: Kindy forgets the account either way.
+    }
+    await closeAccount()
+  }
+
+  /**
+   * Deletes the connected account's Kindy data from this device, and with
+   * `fromDrive` also its backup in Drive, then disconnects (ADR 0005,
+   * section 4). Google Contacts are never touched.
+   */
+  async function wipeAccount(options: { fromDrive: boolean }): Promise<void> {
+    const current = account.value
+    if (!current) return
+    clearTimeout(backupTimer)
+    // Drive first: if that fails, the local data is still there to try again.
+    if (options.fromDrive) await getCloudBackupGateway().remove()
+    await repository.destroy()
+    repository = closedRepository
+    forgetSyncTokens(current)
+    try {
+      localStorage.removeItem(lastBackupKey(current))
+    } catch {
+      // Only the "last backup" label.
+    }
+    await disconnectGoogle()
+  }
+
   async function savePerson(person: Person): Promise<void> {
     await repository.savePerson(person)
     await refresh()
@@ -472,6 +596,8 @@ export const useKindyStore = defineStore('kindy', () => {
     contacts: ExternalContactSnapshot[],
   ): Promise<{ imported: number; skipped: number }> {
     if (!data.value) throw new Error('Kindy is not initialized')
+    // Contacts of another account never enter this account's data.
+    if (connection.providerAccountId !== account.value?.id) throw new AccountMismatchError()
     // Read a plain repository snapshot here. Pinia wraps `data` deeply in Vue
     // proxies, which cannot be passed to structuredClone in the browser.
     const next = await repository.getData()
@@ -1251,6 +1377,10 @@ export const useKindyStore = defineStore('kindy', () => {
     loading,
     error,
     data,
+    account,
+    connectGoogle,
+    disconnectGoogle,
+    wipeAccount,
     people,
     circles,
     selfPerson,

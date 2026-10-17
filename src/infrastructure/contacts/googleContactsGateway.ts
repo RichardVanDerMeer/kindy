@@ -2,17 +2,23 @@ import { Capacitor, registerPlugin } from '@capacitor/core'
 
 import type { ContactUpdate, RemoteContactFields } from '@/domain/contactSync'
 import type { ContactDate, ContactEvent } from '@/domain/model'
-import type {
-  ExternalContactsChangeSet,
-  ExternalContactsConnection,
-  ExternalContactsGateway,
-  ExternalContactsPage,
-  ExternalContactSnapshot,
-  NewExternalContact,
+import {
+  AccountMismatchError,
+  type ExternalContactsChangeSet,
+  type ExternalContactsConnection,
+  type ExternalContactsGateway,
+  type ExternalContactsPage,
+  type ExternalContactSnapshot,
+  type KindyAccount,
+  type NewExternalContact,
 } from '@/domain/ports'
 
 interface GoogleContactsPlugin {
-  authorize(options: { interactive: boolean }): Promise<ExternalContactsConnection>
+  authorize(options: {
+    interactive: boolean
+    accountEmail?: string
+  }): Promise<ExternalContactsConnection>
+  forget(): Promise<void>
   listConnections(options: {
     pageToken?: string
     syncToken?: string
@@ -35,7 +41,8 @@ interface GoogleContactsPlugin {
     content: string
   }): Promise<GoogleDriveFile>
   downloadBackup(options: { fileId: string }): Promise<{ content: string }>
-  revoke(): Promise<void>
+  deleteBackup(options: { fileId: string }): Promise<void>
+  revoke(options: { accountEmail?: string }): Promise<void>
 }
 
 export interface GoogleDriveFile {
@@ -155,6 +162,22 @@ interface GoogleFieldMetadata {
 const rawPlugin = registerPlugin<GoogleContactsPlugin>('KindyGoogleContacts')
 
 /**
+ * The account Kindy's open data belongs to (ADR 0005). Every authorisation,
+ * also the silent one for a fresh token, asks Google for exactly this account.
+ */
+let accountInUse: KindyAccount | null = null
+
+/** Authorises the account in use and refuses any other account Google returns. */
+async function authorizeAccount(interactive: boolean): Promise<ExternalContactsConnection> {
+  const connection = await rawPlugin.authorize({ interactive, accountEmail: accountInUse?.email })
+  if (accountInUse && connection.providerAccountId !== accountInUse.id) {
+    await rawPlugin.forget()
+    throw new AccountMismatchError()
+  }
+  return connection
+}
+
+/**
  * Google access tokens expire after about an hour, and the native side loses
  * its token when Android restarts the app process. On either, fetch a fresh
  * token silently (never with a Google screen) and retry the call once.
@@ -165,7 +188,9 @@ async function withFreshToken<T>(call: () => Promise<T>): Promise<T> {
   } catch (error) {
     const code = (error as { code?: string } | null)?.code
     if (code !== '401' && code !== 'NOT_AUTHORIZED') throw error
-    await rawPlugin.authorize({ interactive: false })
+    // Without an account in use there is nothing Kindy may reconnect to.
+    if (!accountInUse) throw error
+    await authorizeAccount(false)
     return call()
   }
 }
@@ -173,7 +198,8 @@ async function withFreshToken<T>(call: () => Promise<T>): Promise<T> {
 /** The one native Google plugin: it holds the account token for Contacts and Drive. */
 export const nativeGooglePlugin: GoogleContactsPlugin = {
   authorize: (options) => rawPlugin.authorize(options),
-  revoke: () => rawPlugin.revoke(),
+  forget: () => rawPlugin.forget(),
+  revoke: (options) => rawPlugin.revoke(options),
   listConnections: (options) => withFreshToken(() => rawPlugin.listConnections(options)),
   getContact: (options) => withFreshToken(() => rawPlugin.getContact(options)),
   updateContact: (options) => withFreshToken(() => rawPlugin.updateContact(options)),
@@ -182,6 +208,7 @@ export const nativeGooglePlugin: GoogleContactsPlugin = {
   findBackup: (options) => withFreshToken(() => rawPlugin.findBackup(options)),
   uploadBackup: (options) => withFreshToken(() => rawPlugin.uploadBackup(options)),
   downloadBackup: (options) => withFreshToken(() => rawPlugin.downloadBackup(options)),
+  deleteBackup: (options) => withFreshToken(() => rawPlugin.deleteBackup(options)),
 }
 const nativePlugin = nativeGooglePlugin
 
@@ -268,19 +295,25 @@ export function mapGooglePerson(person: GooglePerson): ExternalContactSnapshot |
 class NativeGoogleContactsGateway implements ExternalContactsGateway {
   private connection: ExternalContactsConnection | null = null
 
+  useAccount(account: KindyAccount | null): void {
+    if (account?.id !== accountInUse?.id) this.connection = null
+    accountInUse = account
+  }
+
   async getConnection(): Promise<ExternalContactsConnection | null> {
     return this.connection
   }
 
   async authorize(): Promise<ExternalContactsConnection> {
-    this.connection = await nativePlugin.authorize({ interactive: true })
+    this.connection = await authorizeAccount(true)
     return this.connection
   }
 
   async restore(): Promise<ExternalContactsConnection | null> {
+    if (!accountInUse) return null
     if (this.connection) return this.connection
     try {
-      this.connection = await nativePlugin.authorize({ interactive: false })
+      this.connection = await authorizeAccount(false)
       return this.connection
     } catch {
       // Consent is missing or the device is offline; writes stay queued.
@@ -361,7 +394,7 @@ class NativeGoogleContactsGateway implements ExternalContactsGateway {
   }
 
   async revoke(): Promise<void> {
-    await nativePlugin.revoke()
+    await nativePlugin.revoke({ accountEmail: accountInUse?.email })
     this.connection = null
   }
 }
@@ -416,6 +449,7 @@ const PREVIEW_STORE_KEY = 'kindy.preview-google-contacts'
 const previewConnection: ExternalContactsConnection = {
   provider: 'google',
   providerAccountId: 'preview-account',
+  email: 'preview@kindy.test',
   displayName: 'Google-preview',
 }
 
@@ -449,17 +483,27 @@ function previewDelay(): Promise<void> {
  */
 class PreviewGoogleContactsGateway implements ExternalContactsGateway {
   private connection: ExternalContactsConnection | null = null
+  private account: KindyAccount | null = null
+
+  useAccount(account: KindyAccount | null): void {
+    this.account = account
+    if (!account) this.connection = null
+  }
 
   async getConnection(): Promise<ExternalContactsConnection | null> {
     return this.connection
   }
 
   async authorize(): Promise<ExternalContactsConnection> {
+    if (this.account && this.account.id !== previewConnection.providerAccountId) {
+      throw new AccountMismatchError()
+    }
     this.connection = previewConnection
     return this.connection
   }
 
   async restore(): Promise<ExternalContactsConnection | null> {
+    if (this.account?.id !== previewConnection.providerAccountId) return null
     this.connection = previewConnection
     return this.connection
   }

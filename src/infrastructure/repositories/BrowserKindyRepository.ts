@@ -10,7 +10,8 @@ import {
 } from '@/domain/model'
 import type { KindyRepository } from '@/domain/ports'
 
-const STORAGE_KEY = 'kindy.local-data.v3'
+/** The single store from before ADR 0005; accounts get `${STORAGE_KEY}.<hash>`. */
+export const STORAGE_KEY = 'kindy.local-data.v3'
 const SCHEMA_VERSION = KINDY_SCHEMA_VERSION
 
 function emptyData(): KindyData {
@@ -48,8 +49,22 @@ async function loadDemoData(): Promise<KindyData> {
 export class BrowserKindyRepository implements KindyRepository {
   private data: KindyData = emptyData()
 
+  /** With `seedDemo`, a new store starts with the demo data (development only). */
+  constructor(
+    private readonly storageKey: string = STORAGE_KEY,
+    private readonly seedDemo = import.meta.env.DEV,
+  ) {}
+
+  static exists(storageKey: string): boolean {
+    try {
+      return localStorage.getItem(storageKey) !== null
+    } catch {
+      return false
+    }
+  }
+
   async initialize(): Promise<void> {
-    const stored = localStorage.getItem(STORAGE_KEY)
+    const stored = localStorage.getItem(this.storageKey)
     if (stored) {
       this.data = JSON.parse(stored) as KindyData
       this.data.externalIdentities ??= []
@@ -74,12 +89,17 @@ export class BrowserKindyRepository implements KindyRepository {
       return
     }
 
-    this.data = import.meta.env.DEV ? await loadDemoData() : emptyData()
+    this.data = import.meta.env.DEV && this.seedDemo ? await loadDemoData() : emptyData()
     await this.persist()
   }
 
   async close(): Promise<void> {
     // The browser adapter contains synthetic preview data only.
+  }
+
+  async destroy(): Promise<void> {
+    this.data = emptyData()
+    localStorage.removeItem(this.storageKey)
   }
 
   async getData(): Promise<KindyData> {
@@ -238,6 +258,6 @@ export class BrowserKindyRepository implements KindyRepository {
   }
 
   private async persist(): Promise<void> {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data))
+    localStorage.setItem(this.storageKey, JSON.stringify(this.data))
   }
 }

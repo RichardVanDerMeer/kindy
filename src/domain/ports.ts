@@ -58,6 +58,8 @@ export interface KindyRepository
     InteractionRepository {
   initialize(): Promise<void>
   close(): Promise<void>
+  /** Deletes this store and everything in it; it cannot be undone. */
+  destroy(): Promise<void>
   getData(): Promise<KindyData>
   replaceData(data: KindyData): Promise<void>
   listUpcoming(now: number, limit?: number): Promise<UpcomingItem[]>
@@ -65,9 +67,18 @@ export interface KindyRepository
 }
 
 export interface ExternalContactsGateway {
+  /**
+   * Fixes the account every later call asks Google for; null when no account
+   * is connected. Without an account, `restore` never connects.
+   */
+  useAccount(account: KindyAccount | null): void
   getConnection(): Promise<ExternalContactsConnection | null>
+  /**
+   * Shows Google's consent. With an account in use only that account is
+   * accepted (AccountMismatchError otherwise); without one the user picks.
+   */
   authorize(): Promise<ExternalContactsConnection>
-  /** Reconnects without showing any Google UI; null when consent is needed first. */
+  /** Reconnects the account in use without any Google UI; null when that is not possible. */
   restore(): Promise<ExternalContactsConnection | null>
   listCandidates(pageToken?: string): Promise<ExternalContactsPage>
   /** Contacts changed or deleted since the sync token; pass `pageToken` for the next page. */
@@ -81,6 +92,7 @@ export interface ExternalContactsGateway {
   createContact(input: NewExternalContact): Promise<{ resourceName: string; etag: string }>
   /** Replaces the contact photo with an image given as a data URL. */
   updateContactPhoto(resourceName: string, photo: string): Promise<{ etag: string }>
+  /** Withdraws Kindy's Google access for the account in use. */
   revoke(): Promise<void>
 }
 
@@ -96,7 +108,24 @@ export interface NewExternalContact {
 export interface ExternalContactsConnection {
   provider: 'google'
   providerAccountId: string
+  /** The account's email; Google needs it to authorise that exact account again. */
+  email?: string
   displayName?: string
+}
+
+/** The Google account Kindy's data belongs to (ADR 0005). */
+export interface KindyAccount {
+  id: string
+  email: string
+  displayName?: string
+}
+
+/** Google returned another account than the one Kindy's data belongs to. */
+export class AccountMismatchError extends Error {
+  constructor() {
+    super('Google returned a different account')
+    this.name = 'AccountMismatchError'
+  }
 }
 
 export interface ExternalContactSnapshot {
@@ -154,6 +183,8 @@ export interface CloudBackupGateway {
   latest(): Promise<CloudBackupInfo | null>
   upload(content: string): Promise<CloudBackupInfo>
   download(id: string): Promise<string>
+  /** Deletes Kindy's backup file from the app folder of the connected account. */
+  remove(): Promise<void>
 }
 
 export interface CloudBackupInfo {

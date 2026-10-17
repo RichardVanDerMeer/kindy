@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 
 import AgendaEditors from '@/components/AgendaEditors.vue'
 import BottomNavigation from '@/components/BottomNavigation.vue'
+import ConnectScreen from '@/components/ConnectScreen.vue'
 import LockScreen from '@/components/LockScreen.vue'
 import { useKindyStore } from '@/stores/kindy'
 import { routeForDeepLink } from '@/router/deepLinks'
@@ -50,6 +51,7 @@ async function unlock(): Promise<void> {
       <p>{{ t('security.checking') }}</p>
     </div>
     <LockScreen v-else-if="security.locked" :busy="security.authenticating" @unlock="unlock" />
+    <ConnectScreen v-else-if="!store.account" />
     <div v-else-if="store.loading && !store.initialized" class="center-state" role="status">
       <span class="loading-orbit"></span>
       <p>{{ t('common.loading') }}</p>
@@ -63,7 +65,9 @@ async function unlock(): Promise<void> {
     <RouterView v-else />
     <AgendaEditors v-if="store.initialized" />
     <BottomNavigation
-      v-if="security.ready && !security.locked && route.meta.showNavigation !== false"
+      v-if="
+        security.ready && !security.locked && store.account && route.meta.showNavigation !== false
+      "
     />
   </main>
 </template>

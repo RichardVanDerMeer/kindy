@@ -50,6 +50,14 @@ export class SqliteKindyRepository implements KindyRepository {
   private readonly sqlite = new SQLiteConnection(CapacitorSQLite)
   private database?: SQLiteDBConnection
 
+  /** One database per Google account (ADR 0005); `kindy` is the single one from before. */
+  constructor(private readonly name: string = DATABASE_NAME) {}
+
+  static async exists(name: string): Promise<boolean> {
+    const result = await new SQLiteConnection(CapacitorSQLite).isDatabase(name)
+    return Boolean(result.result)
+  }
+
   async initialize(): Promise<void> {
     const secret = await this.sqlite.isSecretStored()
     if (!secret.result) {
@@ -57,11 +65,11 @@ export class SqliteKindyRepository implements KindyRepository {
       await this.sqlite.setEncryptionSecret(passphrase)
     }
 
-    await this.sqlite.addUpgradeStatement(DATABASE_NAME, migrations)
-    const connectionState = await this.sqlite.isConnection(DATABASE_NAME, false)
+    await this.sqlite.addUpgradeStatement(this.name, migrations)
+    const connectionState = await this.sqlite.isConnection(this.name, false)
     this.database = connectionState.result
-      ? await this.sqlite.retrieveConnection(DATABASE_NAME, false)
-      : await this.sqlite.createConnection(DATABASE_NAME, true, 'secret', DATABASE_VERSION, false)
+      ? await this.sqlite.retrieveConnection(this.name, false)
+      : await this.sqlite.createConnection(this.name, true, 'secret', DATABASE_VERSION, false)
     await this.database.open()
     await this.database.execute('PRAGMA foreign_keys = ON;', false)
   }
@@ -69,7 +77,14 @@ export class SqliteKindyRepository implements KindyRepository {
   async close(): Promise<void> {
     if (!this.database) return
     await this.database.close()
-    await this.sqlite.closeConnection(DATABASE_NAME, false)
+    await this.sqlite.closeConnection(this.name, false)
+    this.database = undefined
+  }
+
+  async destroy(): Promise<void> {
+    if (!this.database) await this.initialize()
+    await this.requireDatabase().delete()
+    await this.sqlite.closeConnection(this.name, false)
     this.database = undefined
   }
 

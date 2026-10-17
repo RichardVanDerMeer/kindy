@@ -17,6 +17,7 @@ import {
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import AccountDialog from '@/components/AccountDialog.vue'
 import RestoreBackupDialog from '@/components/RestoreBackupDialog.vue'
 import WidgetPreview from '@/components/WidgetPreview.vue'
 import { agendaFilters, toggleAgendaFilter, type AgendaFilter } from '@/domain/agenda'
@@ -32,6 +33,8 @@ const security = useSecurityStore()
 const store = useKindyStore()
 const { locale, setLocale } = useLocaleSetting()
 const showRestore = ref(false)
+/** Disconnect or wipe the connected Google account (ADR 0005). */
+const accountAction = ref<'disconnect' | 'wipe' | null>(null)
 const widget = useWidgetStore()
 
 function toggleWidgetFilter(filter?: AgendaFilter): void {
@@ -125,6 +128,9 @@ const nameOrders: NameOrder[] = ['given-first', 'family-first']
           <h2>{{ $t('settings.googleContacts') }}</h2>
         </div>
         <p>{{ $t('settings.googleContactsHint') }}</p>
+        <p v-if="store.account" class="settings-account">
+          {{ $t('account.connectedAs', { email: store.account.email }) }}
+        </p>
       </div>
       <div v-if="store.googleLinked" class="settings-card__footer settings-card__footer--sync">
         <CloudUpload :size="17" />
@@ -144,9 +150,24 @@ const nameOrders: NameOrder[] = ['given-first', 'family-first']
         class="button button--ghost settings-wide-button"
         @click="router.push({ path: '/people', query: { import: 'google' } })"
       >
-        {{ store.googleLinked ? $t('google.importFromGoogle') : $t('settings.connectGoogle') }}
+        {{ $t('google.importFromGoogle') }}
       </button>
+      <div class="settings-account-actions">
+        <button class="button button--ghost" @click="accountAction = 'disconnect'">
+          {{ $t('account.disconnect') }}
+        </button>
+        <button class="button button--ghost button--danger" @click="accountAction = 'wipe'">
+          {{ $t('account.wipe') }}
+        </button>
+        <small class="settings-note">{{ $t('account.wipeHint') }}</small>
+      </div>
     </article>
+    <AccountDialog
+      :open="accountAction !== null"
+      :mode="accountAction ?? 'disconnect'"
+      @close="accountAction = null"
+      @done="accountAction = null"
+    />
 
     <article class="card settings-card settings-card--soon">
       <div class="settings-card__icon"><Apple :size="24" /></div>

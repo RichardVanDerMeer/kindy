@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -222,6 +221,7 @@ class FakeGoogle implements ExternalContactsGateway {
   created: NewExternalContact[] = []
   connected = true
 
+  useAccount() {}
   async getConnection() {
     return null
   }
@@ -460,12 +460,8 @@ describe('account safety', () => {
     })
   })
 
-  it('has no way to delete a Google contact', () => {
-    const plugin = readFileSync(
-      'android/app/src/main/java/nl/richardvandermeer/kindy/contacts/KindyGoogleContactsPlugin.kt',
-      'utf8',
-    )
-    expect(plugin).not.toMatch(/deleteContact|batchDelete|"DELETE"/)
+  // The native bridge itself is checked in google-safety.spec.ts (ADR 0005, section 5).
+  it('offers no way to delete a Google contact', () => {
     expect(Object.getOwnPropertyNames(FakeGoogle.prototype).join()).not.toMatch(/delete/i)
   })
 })

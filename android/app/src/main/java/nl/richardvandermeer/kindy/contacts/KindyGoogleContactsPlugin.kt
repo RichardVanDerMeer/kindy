@@ -28,7 +28,12 @@ class KindyGoogleContactsPlugin : Plugin() {
     fun authorize(call: PluginCall) {
         val scopes = requestedScopes()
         val builder = AuthorizationRequest.builder().setRequestedScopes(scopes)
-        if (call.getBoolean("interactive", true) == true) {
+        // Once connected, Kindy always asks for that account (ADR 0005), so a
+        // silent authorisation can never return another account on the phone.
+        val accountEmail = call.getString("accountEmail")
+        if (accountEmail != null) {
+            builder.setAccount(Account(accountEmail, GOOGLE_ACCOUNT_TYPE))
+        } else if (call.getBoolean("interactive", true) == true) {
             builder.setPrompt(AuthorizationRequest.Prompt.SELECT_ACCOUNT)
         }
 
@@ -296,6 +301,29 @@ class KindyGoogleContactsPlugin : Plugin() {
         }
     }
 
+    /** Deletes Kindy's own backup file from the app folder; never anything else. */
+    @PluginMethod
+    fun deleteBackup(call: PluginCall) {
+        val token = requireToken(call) ?: return
+        val fileId = call.getString("fileId")
+        if (fileId == null || !fileId.matches(DRIVE_ID_PATTERN)) {
+            call.reject("A valid backup file id is required")
+            return
+        }
+        execute {
+            try {
+                val response = send("DELETE", "$DRIVE_API_URL/files/$fileId", token, null)
+                if (response.status !in 200..299 && response.status != 404) {
+                    call.reject("Google Drive returned HTTP ${response.status}", response.status.toString())
+                    return@execute
+                }
+                call.resolve()
+            } catch (error: Exception) {
+                call.reject("Unable to delete the Google Drive backup", error)
+            }
+        }
+    }
+
     @PluginMethod
     fun downloadBackup(call: PluginCall) {
         val token = requireToken(call) ?: return
@@ -318,9 +346,18 @@ class KindyGoogleContactsPlugin : Plugin() {
         }
     }
 
+    /** Drops the token without revoking anything, e.g. when Google returned an unexpected account. */
+    @PluginMethod
+    fun forget(call: PluginCall) {
+        accessToken = null
+        account = null
+        call.resolve()
+    }
+
     @PluginMethod
     fun revoke(call: PluginCall) {
         val selectedAccount = account
+            ?: call.getString("accountEmail")?.let { Account(it, GOOGLE_ACCOUNT_TYPE) }
         if (selectedAccount == null) {
             accessToken = null
             call.resolve()
@@ -349,12 +386,21 @@ class KindyGoogleContactsPlugin : Plugin() {
         }
         accessToken = token
         val googleAccount = result.toGoogleSignInAccount()
-        account = googleAccount?.account
+        val accountId = googleAccount?.id
+        val email = googleAccount?.email
+        if (accountId.isNullOrBlank() || email.isNullOrBlank()) {
+            // Kindy keeps data per account; without an id the data cannot be kept apart.
+            accessToken = null
+            call.reject("Google did not return the account", "NO_ACCOUNT")
+            return
+        }
+        account = googleAccount.account
         call.resolve(
             JSObject().apply {
                 put("provider", "google")
-                put("providerAccountId", googleAccount?.id ?: googleAccount?.email ?: "google")
-                put("displayName", googleAccount?.displayName ?: googleAccount?.email)
+                put("providerAccountId", accountId)
+                put("email", email)
+                put("displayName", googleAccount.displayName ?: email)
             },
         )
     }
@@ -429,6 +475,7 @@ class KindyGoogleContactsPlugin : Plugin() {
 }
 
 private const val AUTHORIZATION_REQUEST_CODE = 9412
+private const val GOOGLE_ACCOUNT_TYPE = "com.google"
 private const val CONTACTS_SCOPE = "https://www.googleapis.com/auth/contacts"
 private const val PEOPLE_API_URL = "https://people.googleapis.com/v1"
 private const val DRIVE_APPDATA_SCOPE = "https://www.googleapis.com/auth/drive.appdata"
