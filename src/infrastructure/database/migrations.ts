@@ -282,37 +282,32 @@ ALTER TABLE people ADD COLUMN about TEXT;
 ALTER TABLE people ADD COLUMN jobs_json TEXT;
 `
 
-export const migrations: capSQLiteVersionUpgrade[] = [
-  {
-    toVersion: 1,
-    statements: [migrationOne],
-  },
-  {
-    toVersion: 2,
-    statements: [migrationTwo],
-  },
-  {
-    toVersion: 3,
-    statements: [migrationThree],
-  },
-  {
-    toVersion: 4,
-    statements: [migrationFour],
-  },
-  {
-    toVersion: 5,
-    statements: [migrationFive],
-  },
-  {
-    toVersion: 6,
-    statements: [migrationSix],
-  },
-  {
-    toVersion: 7,
-    statements: [migrationSeven],
-  },
-  {
-    toVersion: 8,
-    statements: [migrationEight],
-  },
+/**
+ * Splits a migration into single statements. On Android the SQLite plugin
+ * passes each entry to `execSQL`, which runs only the first statement of a
+ * string, so a multi-statement block would silently stop after one statement.
+ * Migrations contain no triggers or semicolons inside literals.
+ */
+export function splitStatements(sql: string): string[] {
+  return sql
+    .split(';')
+    .map((statement) => statement.trim())
+    .filter(Boolean)
+    .map((statement) => `${statement};`)
+}
+
+const versions: Array<[number, string]> = [
+  [1, migrationOne],
+  [2, migrationTwo],
+  [3, migrationThree],
+  [4, migrationFour],
+  [5, migrationFive],
+  [6, migrationSix],
+  [7, migrationSeven],
+  [8, migrationEight],
 ]
+
+export const migrations: capSQLiteVersionUpgrade[] = versions.map(([toVersion, sql]) => ({
+  toVersion,
+  statements: splitStatements(sql),
+}))
