@@ -35,20 +35,20 @@ Kindy should not change how that address book is organised.
 
 ### 2. Everything Google can store about a person is stored in Google
 
-| Kindy                                 | People API field                         |
-| ------------------------------------- | ---------------------------------------- |
-| Name (given, middle, family)          | `names`                                  |
-| Nickname                              | `nicknames`                              |
-| Phone numbers with label              | `phoneNumbers`                           |
-| Email addresses with label            | `emailAddresses`                         |
-| Addresses with label                  | `addresses`                              |
-| Websites and social profiles          | `urls`                                   |
-| Birthday (year optional)              | `birthdays`                              |
-| Wedding day, anniversary              | `events` with type `anniversary`         |
-| Date of death                         | `events` with custom type label          |
-| Jobs (title, employer, start and end) | `organizations`                          |
-| About                                 | `biographies` (Google's "Notes")         |
-| Photo                                 | `photos` (`updateContactPhoto`)          |
+| Kindy                                 | People API field                 |
+| ------------------------------------- | -------------------------------- |
+| Name (given, middle, family)          | `names`                          |
+| Nickname                              | `nicknames`                      |
+| Phone numbers with label              | `phoneNumbers`                   |
+| Email addresses with label            | `emailAddresses`                 |
+| Addresses with label                  | `addresses`                      |
+| Websites and social profiles          | `urls`                           |
+| Birthday (year optional)              | `birthdays`                      |
+| Wedding day, anniversary              | `events` with type `anniversary` |
+| Date of death                         | `events` with custom type label  |
+| Jobs (title, employer, start and end) | `organizations`                  |
+| About                                 | `biographies` (Google's "Notes") |
+| Photo                                 | `photos` (`updateContactPhoto`)  |
 
 Kindy never writes:
 
