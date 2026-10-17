@@ -12,7 +12,14 @@ import {
   type RemoteContactFields,
 } from '@/domain/contactSync'
 import type { ExternalIdentity, KindyData, Person } from '@/domain/model'
-import type { ExternalContactsGateway, NewExternalContact } from '@/domain/ports'
+import type {
+  ExternalContactsChangeSet,
+  ExternalContactsGateway,
+  ExternalContactsPage,
+  ExternalContactSnapshot,
+  NewExternalContact,
+} from '@/domain/ports'
+import { runIncomingContactSync } from '@/infrastructure/sync/contactChangesRunner'
 import { runContactSync } from '@/infrastructure/sync/contactSyncRunner'
 
 function person(id: string, overrides: Partial<Person> = {}): Person {
@@ -224,10 +231,10 @@ class FakeGoogle implements ExternalContactsGateway {
   async restore() {
     return this.connected ? this.authorize() : null
   }
-  async listCandidates() {
+  async listCandidates(_pageToken?: string): Promise<ExternalContactsPage> {
     return { contacts: [] }
   }
-  async fetchChanges(syncToken: string) {
+  async fetchChanges(syncToken: string, _pageToken?: string): Promise<ExternalContactsChangeSet> {
     return {
       contacts: [],
       deletedResourceNames: [],
@@ -480,5 +487,487 @@ describe('importing dates from Google', () => {
       deathDate: { year: 2023, month: 8, day: 2 },
       anniversaries: [{ year: 1999, month: 5, day: 20 }],
     })
+  })
+})
+
+/** Google with an address book that can be read in pages and as change sets. */
+class ChangingGoogle extends FakeGoogle {
+  pages: ExternalContactsPage[] = [{ contacts: [], nextSyncToken: 'full-token' }]
+  changes: ExternalContactsChangeSet[] = []
+  fullReads = 0
+  changeRequests: Array<{ syncToken: string; pageToken?: string }> = []
+
+  override async listCandidates(pageToken?: string) {
+    if (!pageToken) this.fullReads += 1
+    const index = pageToken ? Number(pageToken) : 0
+    return this.pages[index] ?? { contacts: [] }
+  }
+
+  override async fetchChanges(syncToken: string, pageToken?: string) {
+    this.changeRequests.push({ syncToken, pageToken })
+    const index = pageToken ? Number(pageToken) : 0
+    return (
+      this.changes[index] ?? {
+        contacts: [],
+        deletedResourceNames: [],
+        nextSyncToken: syncToken,
+        requiresFullRefresh: false,
+      }
+    )
+  }
+}
+
+function tokenStore(initial: Record<string, string> = {}) {
+  const tokens = new Map(Object.entries(initial))
+  return {
+    tokens,
+    get: (account: string) => tokens.get(account),
+    set: (account: string, token: string | undefined) => {
+      if (token) tokens.set(account, token)
+      else tokens.delete(account)
+    },
+  }
+}
+
+function snapshot(overrides: Partial<ExternalContactSnapshot> = {}): ExternalContactSnapshot {
+  return {
+    resourceName: 'people/robin',
+    etag: 'e5',
+    displayName: 'Robin Visser',
+    givenName: 'Robin',
+    familyName: 'Visser',
+    events: [],
+    contactPoints: [],
+    ...overrides,
+  }
+}
+
+const incomingLabels = { death: 'Overleden', deathLabels: ['Overleden', 'Passed away'] }
+
+function changeSet(overrides: Partial<ExternalContactsChangeSet>): ExternalContactsChangeSet {
+  return {
+    contacts: [],
+    deletedResourceNames: [],
+    nextSyncToken: 'token-2',
+    requiresFullRefresh: false,
+    ...overrides,
+  }
+}
+
+function linkedRobin(overrides: Partial<KindyData> = {}) {
+  return data({
+    people: [
+      person('robin', {
+        displayName: 'Robin',
+        givenName: 'Robin',
+        birthDate: { year: null, month: 1, day: 1 },
+        contactPoints: [
+          {
+            id: 'phone-old',
+            kind: 'phone',
+            label: 'mobile',
+            value: '+31 6 0000 0000',
+            normalizedValue: '+31600000000',
+            isPrimary: true,
+            source: 'google',
+          },
+          {
+            id: 'address-kindy',
+            kind: 'address',
+            label: 'home',
+            value: 'Dorpsstraat 1',
+            normalizedValue: 'dorpsstraat 1',
+            isPrimary: true,
+            source: 'kindy',
+          },
+        ],
+      }),
+      person('lotte'),
+    ],
+    externalIdentities: [
+      { ...identity, etag: 'e0', writtenFields: { birthday: { month: 1, day: 1 }, events: [] } },
+    ],
+    circles: [
+      {
+        id: 'family',
+        name: 'Familie',
+        colorToken: 'family',
+        iconKey: 'home',
+        isFavorite: false,
+        isArchived: false,
+      },
+    ],
+    ...overrides,
+  })
+}
+
+describe('reading changes from Google', () => {
+  it('replaces the Google fields of a linked person and keeps the new sync token', async () => {
+    const google = new ChangingGoogle()
+    google.changes = [
+      changeSet({
+        contacts: [
+          snapshot({
+            birthday: { year: 1985, month: 10, day: 2 },
+            events: [{ type: 'anniversary', date: { year: 2012, month: 6, day: 9 } }],
+            contactPoints: [
+              { providerFieldId: 'p1', kind: 'phone', label: 'work', value: '+31 20 123 4567' },
+              { providerFieldId: 'm1', kind: 'email', label: 'home', value: 'robin@example.test' },
+              { providerFieldId: 'a1', kind: 'address', label: 'work', value: 'Kade 2' },
+              { providerFieldId: 'u1', kind: 'url', label: 'website', value: 'https://robin.test' },
+            ],
+          }),
+          snapshot({ resourceName: 'people/stranger', displayName: 'Not linked' }),
+        ],
+      }),
+    ]
+    const repository = memoryRepository(linkedRobin())
+    const syncTokens = tokenStore({ account: 'token-1' })
+
+    const result = await runIncomingContactSync({
+      repository,
+      gateway: google,
+      syncTokens,
+      labels: incomingLabels,
+      now: () => 9,
+      newId: (() => {
+        let id = 0
+        return () => `new-${++id}`
+      })(),
+    })
+
+    expect(result).toEqual({ updated: 1, removed: 0, fullRead: false, waiting: false })
+    expect(google.changeRequests).toEqual([{ syncToken: 'token-1', pageToken: undefined }])
+    expect(syncTokens.tokens.get('account')).toBe('token-2')
+    const robin = repository.current.people.find((candidate) => candidate.id === 'robin')
+    expect(robin).toMatchObject({
+      displayName: 'Robin Visser',
+      familyName: 'Visser',
+      birthDate: { year: 1985, month: 10, day: 2 },
+      updatedAt: 9,
+    })
+    expect(robin?.contactPoints.map((point) => [point.kind, point.value])).toEqual([
+      ['phone', '+31 20 123 4567'],
+      ['email', 'robin@example.test'],
+      ['address', 'Kade 2'],
+      // Kindy does not write addresses yet, so one added in Kindy stays.
+      ['address', 'Dorpsstraat 1'],
+      ['url', 'https://robin.test'],
+    ])
+    expect(repository.current.events).toEqual([
+      expect.objectContaining({
+        type: 'anniversary',
+        date: { year: 2012, month: 6, day: 9 },
+        personIds: ['robin'],
+        source: 'google',
+        externalSourceRef: 'people/robin',
+      }),
+    ])
+    // Unlinked contacts are not imported; Kindy data is untouched.
+    expect(repository.current.people).toHaveLength(2)
+    expect(repository.current.circles).toHaveLength(1)
+    expect(repository.current.externalIdentities[0]).toMatchObject({
+      etag: 'e5',
+      lastSyncedAt: 9,
+      writtenFields: { birthday: { year: 1985, month: 10, day: 2 } },
+    })
+  })
+
+  it('follows change pages and only stores the token of the last page', async () => {
+    const google = new ChangingGoogle()
+    google.changes = [
+      changeSet({ contacts: [snapshot({ displayName: 'Robin 1' })], nextPageToken: '1' }),
+      changeSet({ contacts: [snapshot({ displayName: 'Robin 2', etag: 'e6' })] }),
+    ]
+    const repository = memoryRepository(linkedRobin())
+    const syncTokens = tokenStore({ account: 'token-1' })
+
+    await runIncomingContactSync({
+      repository,
+      gateway: google,
+      syncTokens,
+      labels: incomingLabels,
+    })
+
+    expect(google.changeRequests).toEqual([
+      { syncToken: 'token-1', pageToken: undefined },
+      { syncToken: 'token-1', pageToken: '1' },
+    ])
+    expect(repository.current.people[0]?.displayName).toBe('Robin 2')
+    expect(syncTokens.tokens.get('account')).toBe('token-2')
+  })
+
+  it('skips a contact whose etag Kindy already has', async () => {
+    const google = new ChangingGoogle()
+    google.changes = [changeSet({ contacts: [snapshot({ etag: 'e0' })] })]
+    const repository = memoryRepository(linkedRobin())
+
+    const result = await runIncomingContactSync({
+      repository,
+      gateway: google,
+      syncTokens: tokenStore({ account: 'token-1' }),
+      labels: incomingLabels,
+    })
+
+    expect(result.updated).toBe(0)
+    expect(repository.current.people[0]?.displayName).toBe('Robin')
+  })
+
+  it('keeps edits that still wait in the sync queue', async () => {
+    const google = new ChangingGoogle()
+    google.changes = [
+      changeSet({ contacts: [snapshot({ birthday: { year: 1990, month: 3, day: 3 } })] }),
+    ]
+    const repository = memoryRepository(
+      linkedRobin({
+        syncQueue: [
+          {
+            id: 'op',
+            personId: 'robin',
+            kind: 'update',
+            fields: ['birthday'],
+            state: 'failed',
+            attempts: 1,
+            updatedAt: 1,
+          },
+        ],
+      }),
+    )
+
+    await runIncomingContactSync({
+      repository,
+      gateway: google,
+      syncTokens: tokenStore({ account: 'token-1' }),
+      labels: incomingLabels,
+    })
+
+    const robin = repository.current.people[0]
+    expect(robin?.displayName).toBe('Robin Visser')
+    expect(robin?.birthDate).toEqual({ year: null, month: 1, day: 1 })
+    expect(repository.current.syncQueue).toHaveLength(1)
+  })
+
+  it('reads a death and does not add a wedding day kept in Kindy a second time', async () => {
+    const google = new ChangingGoogle()
+    google.changes = [
+      changeSet({
+        contacts: [
+          snapshot({
+            events: [
+              { type: 'anniversary', date: { year: 1975, month: 6, day: 12 } },
+              { type: 'Passed away', date: { year: 2024, month: 5, day: 14 } },
+            ],
+          }),
+        ],
+      }),
+    ]
+    const wedding = {
+      id: 'wedding',
+      type: 'wedding-anniversary' as const,
+      title: 'Trouwdag',
+      date: { year: 1975, month: 6, day: 12 },
+      personIds: ['robin', 'lotte'],
+      source: 'kindy' as const,
+    }
+    const repository = memoryRepository(linkedRobin({ events: [wedding] }))
+
+    await runIncomingContactSync({
+      repository,
+      gateway: google,
+      syncTokens: tokenStore({ account: 'token-1' }),
+      labels: incomingLabels,
+    })
+
+    expect(repository.current.events).toEqual([wedding])
+    expect(repository.current.people[0]).toMatchObject({
+      isDeceased: true,
+      deathDate: { year: 2024, month: 5, day: 14 },
+    })
+  })
+
+  it('hides a person deleted in Google and shows them again after an undo', async () => {
+    const google = new ChangingGoogle()
+    google.changes = [changeSet({ deletedResourceNames: ['people/robin', 'people/unknown'] })]
+    const repository = memoryRepository(linkedRobin())
+    const syncTokens = tokenStore({ account: 'token-1' })
+
+    const removed = await runIncomingContactSync({
+      repository,
+      gateway: google,
+      syncTokens,
+      labels: incomingLabels,
+      now: () => 20,
+    })
+
+    expect(removed).toMatchObject({ removed: 1 })
+    expect(repository.current.externalIdentities[0]?.remoteDeletedAt).toBe(20)
+    expect(repository.current.people[0]).toMatchObject({ id: 'robin', deletedAt: 20 })
+    expect(repository.current.circles).toHaveLength(1)
+
+    google.changes = [changeSet({ contacts: [snapshot()], nextSyncToken: 'token-3' })]
+    await runIncomingContactSync({
+      repository,
+      gateway: google,
+      syncTokens,
+      labels: incomingLabels,
+      now: () => 30,
+    })
+
+    expect(repository.current.externalIdentities[0]?.remoteDeletedAt).toBeUndefined()
+    expect(repository.current.people[0]?.deletedAt).toBeUndefined()
+    expect(syncTokens.tokens.get('account')).toBe('token-3')
+  })
+
+  it('reads all contacts when the token expired and hides linked ones that are gone', async () => {
+    const google = new ChangingGoogle()
+    google.changes = [changeSet({ requiresFullRefresh: true, nextSyncToken: '' })]
+    // Robin is gone; a contact the listing leaves out (no name) still exists.
+    google.getContactFields = async (resourceName: string) => {
+      if (resourceName === 'people/robin')
+        throw Object.assign(new Error('HTTP 404'), { code: '404' })
+      return { etag: 'n1', birthdays: [], events: [] }
+    }
+    google.pages = [
+      { contacts: [snapshot({ resourceName: 'people/other' })], nextPageToken: '1' },
+      { contacts: [snapshot({ resourceName: 'people/lotte', etag: 'l2' })], nextSyncToken: 'full' },
+    ]
+    const repository = memoryRepository(
+      linkedRobin({
+        externalIdentities: [
+          { ...identity, etag: 'e0' },
+          {
+            ...identity,
+            id: 'identity-lotte',
+            personId: 'lotte',
+            providerResourceId: 'people/lotte',
+          },
+          {
+            ...identity,
+            id: 'identity-nameless',
+            personId: 'nameless',
+            providerResourceId: 'people/nameless',
+          },
+          // Another account's contacts are not in this address book.
+          {
+            ...identity,
+            id: 'identity-x',
+            providerAccountId: 'other',
+            providerResourceId: 'people/x',
+          },
+        ],
+      }),
+    )
+    const syncTokens = tokenStore({ account: 'expired' })
+
+    const result = await runIncomingContactSync({
+      repository,
+      gateway: google,
+      syncTokens,
+      labels: incomingLabels,
+      now: () => 40,
+    })
+
+    expect(result).toEqual({ updated: 1, removed: 1, fullRead: true, waiting: false })
+    expect(google.fullReads).toBe(1)
+    expect(syncTokens.tokens.get('account')).toBe('full')
+    const [robin, lotte, nameless, other] = repository.current.externalIdentities
+    expect(robin?.remoteDeletedAt).toBe(40)
+    expect(nameless?.remoteDeletedAt).toBeUndefined()
+    expect(lotte?.etag).toBe('l2')
+    expect(lotte?.remoteDeletedAt).toBeUndefined()
+    expect(other?.remoteDeletedAt).toBeUndefined()
+  })
+
+  it('reads all contacts on the first run, and does nothing without a link or connection', async () => {
+    const google = new ChangingGoogle()
+    google.pages = [{ contacts: [snapshot()], nextSyncToken: 'first' }]
+    const syncTokens = tokenStore()
+
+    const unlinked = memoryRepository(data({ people: [person('lotte')] }))
+    expect(
+      await runIncomingContactSync({
+        repository: unlinked,
+        gateway: google,
+        syncTokens,
+        labels: incomingLabels,
+      }),
+    ).toMatchObject({ updated: 0, fullRead: false })
+    expect(google.fullReads).toBe(0)
+
+    google.connected = false
+    const repository = memoryRepository(linkedRobin())
+    expect(
+      await runIncomingContactSync({
+        repository,
+        gateway: google,
+        syncTokens,
+        labels: incomingLabels,
+      }),
+    ).toMatchObject({ waiting: true })
+
+    google.connected = true
+    await runIncomingContactSync({
+      repository,
+      gateway: google,
+      syncTokens,
+      labels: incomingLabels,
+    })
+    expect(google.fullReads).toBe(1)
+    expect(syncTokens.tokens.get('account')).toBe('first')
+    expect(repository.current.people[0]?.displayName).toBe('Robin Visser')
+  })
+
+  it('keeps the old token when storing the changes fails, so they are read again', async () => {
+    const google = new ChangingGoogle()
+    google.changes = [changeSet({ contacts: [snapshot()] })]
+    const repository = memoryRepository(linkedRobin())
+    repository.replaceData = async () => {
+      throw new Error('disk full')
+    }
+    const syncTokens = tokenStore({ account: 'token-1' })
+
+    await expect(
+      runIncomingContactSync({ repository, gateway: google, syncTokens, labels: incomingLabels }),
+    ).rejects.toThrow('disk full')
+    expect(syncTokens.tokens.get('account')).toBe('token-1')
+  })
+
+  it('still writes a later Kindy edit with the etag Google returns', async () => {
+    const google = new ChangingGoogle()
+    google.changes = [changeSet({ contacts: [snapshot({ birthday: { month: 4, day: 4 } })] })]
+    const repository = memoryRepository(linkedRobin())
+    await runIncomingContactSync({
+      repository,
+      gateway: google,
+      syncTokens: tokenStore({ account: 'token-1' }),
+      labels: incomingLabels,
+    })
+
+    const edited = await repository.getData()
+    const robin = edited.people[0]
+    if (robin) robin.birthDate = { year: null, month: 5, day: 5 }
+    edited.syncQueue = enqueueSync([], 'robin', 'update', 1, () => 'op', ['birthday'])
+    await repository.replaceData(edited)
+    google.contacts.set('people/robin', {
+      etag: 'e5',
+      birthdays: [{ month: 4, day: 4 }],
+      events: [],
+    })
+    let usedEtag = ''
+    google.updateContactFields = async (resourceName, etag, update) => {
+      usedEtag = etag
+      google.updates.push({ resourceName, update })
+      return { etag: 'e6' }
+    }
+
+    await runContactSync({ repository, gateway: google, labels })
+
+    expect(usedEtag).toBe('e5')
+    // Google's birthday was the local copy, so it is replaced rather than added to.
+    expect(google.updates[0]?.update).toEqual({
+      updatePersonFields: ['birthdays'],
+      birthdays: [{ month: 5, day: 5 }],
+    })
+    expect(repository.current.externalIdentities[0]?.etag).toBe('e6')
   })
 })

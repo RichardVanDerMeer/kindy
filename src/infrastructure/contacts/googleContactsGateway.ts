@@ -115,6 +115,16 @@ interface GoogleConnectionsResponse {
   nextPageToken?: string
   nextSyncToken?: string
   expiredSyncToken?: boolean
+  /** Set by the native side for an HTTP error, instead of the contacts. */
+  status?: number
+}
+
+/** An error response must never read as "no contacts", or every contact would look deleted. */
+function checked(response: GoogleConnectionsResponse): GoogleConnectionsResponse {
+  if (response.status && !response.expiredSyncToken) {
+    throw new Error(`Google Contacts returned HTTP ${response.status}`)
+  }
+  return response
 }
 
 interface GooglePerson {
@@ -315,7 +325,7 @@ class NativeGoogleContactsGateway implements ExternalContactsGateway {
   }
 
   async listCandidates(pageToken?: string): Promise<ExternalContactsPage> {
-    const response = await nativePlugin.listConnections({ pageToken })
+    const response = checked(await nativePlugin.listConnections({ pageToken }))
     return {
       contacts: (response.connections ?? [])
         .map(mapGooglePerson)
@@ -325,8 +335,8 @@ class NativeGoogleContactsGateway implements ExternalContactsGateway {
     }
   }
 
-  async fetchChanges(syncToken: string): Promise<ExternalContactsChangeSet> {
-    const response = await nativePlugin.listConnections({ syncToken })
+  async fetchChanges(syncToken: string, pageToken?: string): Promise<ExternalContactsChangeSet> {
+    const response = checked(await nativePlugin.listConnections({ syncToken, pageToken }))
     if (response.expiredSyncToken) {
       return {
         contacts: [],
@@ -344,6 +354,7 @@ class NativeGoogleContactsGateway implements ExternalContactsGateway {
       deletedResourceNames: changed
         .filter((person) => person.metadata?.deleted && person.resourceName)
         .map((person) => person.resourceName as string),
+      nextPageToken: response.nextPageToken,
       nextSyncToken: response.nextSyncToken ?? syncToken,
       requiresFullRefresh: false,
     }

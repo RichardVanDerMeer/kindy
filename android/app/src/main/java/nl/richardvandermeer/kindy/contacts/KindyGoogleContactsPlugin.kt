@@ -101,12 +101,12 @@ class KindyGoogleContactsPlugin : Plugin() {
                     .appendQueryParameter("personFields", PERSON_FIELDS)
                     .appendQueryParameter("sources", "READ_SOURCE_TYPE_CONTACT")
                     .appendQueryParameter("requestSyncToken", "true")
+                    // A sync request must repeat every parameter of the call that
+                    // issued its token, so the sort order is always sent.
+                    .appendQueryParameter("sortOrder", "FIRST_NAME_ASCENDING")
 
                 call.getString("pageToken")?.let { uri.appendQueryParameter("pageToken", it) }
                 call.getString("syncToken")?.let { uri.appendQueryParameter("syncToken", it) }
-                if (call.getString("syncToken") == null) {
-                    uri.appendQueryParameter("sortOrder", "FIRST_NAME_ASCENDING")
-                }
 
                 val response = get(uri.build().toString(), token)
                 if (response.status == 401) {

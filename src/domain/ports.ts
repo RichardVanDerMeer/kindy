@@ -70,7 +70,8 @@ export interface ExternalContactsGateway {
   /** Reconnects without showing any Google UI; null when consent is needed first. */
   restore(): Promise<ExternalContactsConnection | null>
   listCandidates(pageToken?: string): Promise<ExternalContactsPage>
-  fetchChanges(syncToken: string): Promise<ExternalContactsChangeSet>
+  /** Contacts changed or deleted since the sync token; pass `pageToken` for the next page. */
+  fetchChanges(syncToken: string, pageToken?: string): Promise<ExternalContactsChangeSet>
   getContactFields(resourceName: string): Promise<{ etag: string } & RemoteContactFields>
   updateContactFields(
     resourceName: string,
@@ -124,6 +125,8 @@ export interface ExternalContactsPage {
 export interface ExternalContactsChangeSet {
   contacts: ExternalContactSnapshot[]
   deletedResourceNames: string[]
+  /** More changes follow on another page; the sync token is final on the last page only. */
+  nextPageToken?: string
   nextSyncToken: string
   requiresFullRefresh: boolean
 }

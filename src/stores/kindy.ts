@@ -1,5 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import { App as CapacitorApp } from '@capacitor/app'
+import { Capacitor } from '@capacitor/core'
 
 import { buildAgenda, calendarDay } from '@/domain/agenda'
 import type { AgendaDraft } from '@/domain/agendaDraft'
@@ -8,6 +10,7 @@ import { sameOccurrence, suggestCalendarLinks, type DeviceCalendarEvent } from '
 import { createConnection } from '@/domain/connections'
 import { enqueueSync, importedContactDates, managedContactFields } from '@/domain/contactSync'
 import { normalizeContactLabel } from '@/domain/contactLabels'
+import { applyRemoteContact } from '@/domain/incomingContacts'
 import { safeWebUrl } from '@/domain/links'
 import {
   KINDY_SCHEMA_VERSION,
@@ -35,11 +38,16 @@ import {
 } from '@/infrastructure/backup/googleDriveBackupGateway'
 import { getGoogleContactsGateway } from '@/infrastructure/contacts/googleContactsGateway'
 import { getKindyRepository } from '@/infrastructure/repositories/repository'
+import {
+  runIncomingContactSync,
+  type SyncTokenStore,
+} from '@/infrastructure/sync/contactChangesRunner'
 import { runContactSync } from '@/infrastructure/sync/contactSyncRunner'
 import { i18n } from '@/locales'
 
 const repository = getKindyRepository()
 const WRITE_BACK_KEY = 'kindy.google.writeBack'
+const SYNC_TOKEN_KEY = 'kindy.google.syncToken'
 const LAST_BACKUP_KEY = 'kindy.backup.lastAt'
 const DAY = 86_400_000
 /** Wait for a quiet moment after changes, so a burst of edits makes one backup. */
@@ -141,6 +149,40 @@ function readWriteBack(): boolean {
   }
 }
 
+/**
+ * The People API sync token per Google account. Losing it only costs one full
+ * read of the address book, so local storage is enough.
+ */
+const syncTokens: SyncTokenStore = {
+  get(providerAccountId) {
+    try {
+      return localStorage.getItem(`${SYNC_TOKEN_KEY}.${providerAccountId}`) ?? undefined
+    } catch {
+      return undefined
+    }
+  },
+  set(providerAccountId, token) {
+    try {
+      const key = `${SYNC_TOKEN_KEY}.${providerAccountId}`
+      if (token) localStorage.setItem(key, token)
+      else localStorage.removeItem(key)
+    } catch {
+      // The next run reads the full address book instead.
+    }
+  },
+}
+
+/** Forgets every sync token, so the next run reads all contacts again. */
+function forgetSyncTokens(): void {
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith(`${SYNC_TOKEN_KEY}.`)) localStorage.removeItem(key)
+    }
+  } catch {
+    // Nothing stored.
+  }
+}
+
 export type ContactSyncStatus = 'local' | 'synced' | 'pending' | 'failed'
 
 /** Death events written in any language Kindy supports. */
@@ -204,8 +246,8 @@ export const useKindyStore = defineStore('kindy', () => {
       await repository.initialize()
       await refresh()
       initialized.value = true
-      window.addEventListener('online', () => void syncGoogle())
-      void syncGoogle()
+      observeConnectivity()
+      void syncGoogle({ pull: true })
       void refreshCalendar()
       // At least one backup a day while Kindy is used.
       if (!lastBackupAt.value || Date.now() - lastBackupAt.value > DAY) scheduleBackup(5_000)
@@ -213,6 +255,19 @@ export const useKindyStore = defineStore('kindy', () => {
       error.value = caught instanceof Error ? caught.message : String(caught)
     } finally {
       loading.value = false
+    }
+  }
+
+  /** Unlocking runs `initialize` again; the listeners are added once. */
+  let connectivityObserved = false
+  function observeConnectivity(): void {
+    if (connectivityObserved) return
+    connectivityObserved = true
+    window.addEventListener('online', () => void syncGoogle({ pull: true }))
+    if (Capacitor.isNativePlatform()) {
+      void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+        if (isActive) void syncGoogle({ pull: true })
+      })
     }
   }
 
@@ -284,7 +339,9 @@ export const useKindyStore = defineStore('kindy', () => {
     await refresh()
     rememberBackup(backup.createdAt || Date.now())
     backupState.value = 'idle'
-    void syncGoogle()
+    // The token belongs to the replaced data: read every contact again.
+    forgetSyncTokens()
+    void syncGoogle({ pull: true })
   }
 
   function isLinked(draft: KindyData, personId: string): boolean {
@@ -321,21 +378,41 @@ export const useKindyStore = defineStore('kindy', () => {
     )
   }
 
-  async function syncGoogle(): Promise<void> {
+  /**
+   * Sends queued changes to Google. With `pull`, changes made in Google are
+   * read afterwards, so Kindy's own pending edits are sent before Google's
+   * values come in.
+   */
+  async function syncGoogle(options: { pull?: boolean } = {}): Promise<void> {
     if (googleSyncing.value || !initialized.value) return
     if (typeof navigator !== 'undefined' && !navigator.onLine) return
     googleSyncing.value = true
+    const gateway = getGoogleContactsGateway()
+    const death = i18n.global.t('contactSync.deathEvent')
     try {
       await runContactSync({
         repository,
-        gateway: getGoogleContactsGateway(),
-        labels: { death: i18n.global.t('contactSync.deathEvent') },
+        gateway,
+        labels: { death },
         onlyCreates: !googleWriteBack.value,
       })
-      await refresh()
     } catch {
       // The queue is kept; a later change or reconnect retries it.
+    }
+    try {
+      if (options.pull) {
+        await runIncomingContactSync({
+          repository,
+          gateway,
+          syncTokens,
+          labels: { death, deathLabels: deathLabels() },
+        })
+      }
+    } catch {
+      // The sync token is kept; the next start, resume or reconnect reads the changes.
     } finally {
+      // Locked while syncing: the database is closed and nothing is shown.
+      if (initialized.value) await refresh()
       googleSyncing.value = false
     }
   }
@@ -439,22 +516,17 @@ export const useKindyStore = defineStore('kindy', () => {
           identity.providerAccountId === connection.providerAccountId &&
           identity.providerResourceId === contact.resourceName,
       )
-      const dates = importedContactDates(contact.birthday, contact.events, deathLabels())
       if (existingIdentity) {
-        existingIdentity.etag = contact.etag
-        existingIdentity.lastSyncedAt = Date.now()
-        // Fill a missing birthday, but never overwrite one kept in Kindy.
-        const linked = next.people.find((person) => person.id === existingIdentity.personId)
-        if (linked && !linked.birthDate && dates.birthDate) {
-          linked.birthDate = dates.birthDate
-          existingIdentity.writtenFields = {
-            birthday: contact.birthday ?? null,
-            events: existingIdentity.writtenFields?.events ?? [],
-          }
-        }
+        // Already linked: refresh the local copy of the Google fields.
+        applyRemoteContact(next, existingIdentity, contact, {
+          labels: { death: i18n.global.t('contactSync.deathEvent'), deathLabels: deathLabels() },
+          now: Date.now(),
+          newId: () => crypto.randomUUID(),
+        })
         skipped += 1
         continue
       }
+      const dates = importedContactDates(contact.birthday, contact.events, deathLabels())
 
       const now = Date.now()
       const personId = crypto.randomUUID()
