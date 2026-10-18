@@ -10,7 +10,7 @@ import PersonAvatar from '@/components/PersonAvatar.vue'
 import ViewHeader from '@/components/ViewHeader.vue'
 import { formatPartialDate } from '@/domain/dates'
 import type { Person } from '@/domain/model'
-import { listName, sortByName } from '@/domain/names'
+import { listName, sortByName, sortLetter } from '@/domain/names'
 import { useKindyStore } from '@/stores/kindy'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useToastStore } from '@/stores/toast'
@@ -53,6 +53,32 @@ const filteredPeople = computed(() => {
     return matchesFilter && (!matchingIds.value || matchingIds.value.has(person.id))
   })
 })
+
+/** The list in sections per letter, as in the phone's own contacts. */
+const sections = computed(() => {
+  const result: Array<{ letter: string; people: Person[] }> = []
+  for (const person of filteredPeople.value) {
+    const letter = sortLetter(person, preferences.nameOrder)
+    const last = result.at(-1)
+    if (last?.letter === letter) last.people.push(person)
+    else result.push({ letter, people: [person] })
+  }
+  return result
+})
+/** A letter rail only helps in a long list. */
+const showRail = computed(() => filteredPeople.value.length >= 30 && sections.value.length > 1)
+
+function jumpTo(letter: string): void {
+  document.getElementById(`letter-${letter}`)?.scrollIntoView({ block: 'start' })
+}
+
+/** Sliding a thumb along the rail jumps through the letters. */
+function scrub(event: PointerEvent): void {
+  if (event.type === 'pointermove' && !event.buttons && event.pointerType === 'mouse') return
+  const target = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null
+  const letter = target?.dataset.letter
+  if (letter) jumpTo(letter)
+}
 
 function personSubtitle(person: Person): string {
   if (person.isDeceased) {
@@ -130,33 +156,58 @@ async function importGoogleContacts(
       </button>
     </div>
 
-    <div v-if="filteredPeople.length" class="person-list">
-      <article
-        v-for="person in filteredPeople"
-        :key="person.id"
-        class="person-row"
-        :class="{ 'person-row--deceased': person.isDeceased }"
+    <nav
+      v-if="showRail"
+      class="letter-rail"
+      :aria-label="$t('people.letters')"
+      @pointerdown="scrub"
+      @pointermove="scrub"
+    >
+      <button
+        v-for="section in sections"
+        :key="section.letter"
+        type="button"
+        :data-letter="section.letter"
+        @click="jumpTo(section.letter)"
       >
-        <button class="person-row__main" @click="router.push(`/people/${person.id}`)">
-          <PersonAvatar
-            :name="person.displayName"
-            :photo-ref="person.photoRef"
-            :deceased="person.isDeceased"
-          />
-          <span class="person-row__copy">
-            <strong>{{ listName(person, preferences.nameOrder) }}</strong>
-            <span>{{ person.isSelf ? $t('me.you') : personSubtitle(person) }}</span>
-          </span>
-        </button>
-        <button
-          class="icon-button icon-button--star"
-          :aria-label="$t('profile.favorite')"
-          @click="store.toggleFavorite(person.id)"
+        {{ section.letter }}
+      </button>
+    </nav>
+
+    <div
+      v-if="filteredPeople.length"
+      class="person-list"
+      :class="{ 'person-list--rail': showRail }"
+    >
+      <template v-for="section in sections" :key="section.letter">
+        <h2 :id="`letter-${section.letter}`" class="letter-heading">{{ section.letter }}</h2>
+        <article
+          v-for="person in section.people"
+          :key="person.id"
+          class="person-row"
+          :class="{ 'person-row--deceased': person.isDeceased }"
         >
-          <Star :size="23" :fill="person.isFavorite ? 'currentColor' : 'none'" />
-        </button>
-        <ChevronRight :size="21" aria-hidden="true" />
-      </article>
+          <button class="person-row__main" @click="router.push(`/people/${person.id}`)">
+            <PersonAvatar
+              :name="person.displayName"
+              :photo-ref="person.photoRef"
+              :deceased="person.isDeceased"
+            />
+            <span class="person-row__copy">
+              <strong>{{ listName(person, preferences.nameOrder) }}</strong>
+              <span>{{ person.isSelf ? $t('me.you') : personSubtitle(person) }}</span>
+            </span>
+          </button>
+          <button
+            class="icon-button icon-button--star"
+            :aria-label="$t('profile.favorite')"
+            @click="store.toggleFavorite(person.id)"
+          >
+            <Star :size="23" :fill="person.isFavorite ? 'currentColor' : 'none'" />
+          </button>
+          <ChevronRight :size="21" aria-hidden="true" />
+        </article>
+      </template>
     </div>
 
     <div v-else class="empty-state card">

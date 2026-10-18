@@ -257,6 +257,19 @@ const nameOrders: NameOrder[] = ['given-first', 'family-first']
         <small class="generation-label">{{ $t('widget.preview') }}</small>
         <WidgetPreview :snapshot="widget.snapshot" />
       </div>
+      <div class="segmented" role="radiogroup" :aria-label="$t('upcoming.audience')">
+        <button
+          v-for="audience in ['close', 'everyone'] as const"
+          :key="audience"
+          role="radio"
+          :aria-checked="widget.preferences.audience === audience"
+          :class="{ active: widget.preferences.audience === audience }"
+          @click="widget.savePreferences({ ...widget.preferences, audience })"
+        >
+          {{ $t(`upcoming.audiences.${audience}`) }}
+        </button>
+      </div>
+      <small class="settings-note">{{ $t('upcoming.audienceHint') }}</small>
       <div
         class="filter-row widget-settings__filters"
         role="group"

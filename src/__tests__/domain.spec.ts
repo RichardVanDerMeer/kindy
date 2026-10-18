@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { ageBetween, isValidPartialDate, nextPartialDate } from '@/domain/dates'
 import { scoreDuplicate } from '@/domain/duplicates'
 import type { Person } from '@/domain/model'
+import { sortLetter } from '@/domain/names'
 import { nextOccurrence } from '@/domain/reminders'
 import {
   assertRelationshipParticipants,
@@ -179,5 +180,24 @@ describe('Google Contacts mapping', () => {
 
   it('ignores Google resources without a usable name', () => {
     expect(mapGooglePerson({ resourceName: 'people/empty', names: [] })).toBeNull()
+  })
+})
+
+describe('index letters', () => {
+  const person = (displayName: string, givenName?: string, familyName?: string) =>
+    ({ displayName, givenName, familyName }) as Parameters<typeof sortLetter>[0]
+
+  it('follows the chosen name order', () => {
+    expect(
+      sortLetter(person('Richard van der Meer', 'Richard', 'van der Meer'), 'given-first'),
+    ).toBe('R')
+    expect(
+      sortLetter(person('Richard van der Meer', 'Richard', 'van der Meer'), 'family-first'),
+    ).toBe('M')
+  })
+
+  it('drops accents and groups the rest under #', () => {
+    expect(sortLetter(person('Émile Zola'), 'given-first')).toBe('E')
+    expect(sortLetter(person('123 Taxi'), 'given-first')).toBe('#')
   })
 })

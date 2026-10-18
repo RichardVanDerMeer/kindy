@@ -25,6 +25,7 @@ function readPreferences(): ComingUpPreferences {
     return {
       filters: Array.isArray(stored?.filters) ? stored.filters : [],
       hideNames: stored?.hideNames === true,
+      audience: stored?.audience === 'everyone' ? 'everyone' : 'close',
     }
   } catch {
     return { ...defaultComingUpPreferences }
@@ -51,6 +52,7 @@ export const useWidgetStore = defineStore('widget', () => {
     return buildComingUpSnapshot(kindy.account ? kindy.agenda : [], {
       preferences: preferences.value,
       hideNames: hideNames.value,
+      close: kindy.closePeopleIds,
       describe: (item) => {
         const people = item.personIds
           .map((id) => kindy.personById(id))

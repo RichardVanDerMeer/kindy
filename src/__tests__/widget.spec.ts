@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { AgendaItem } from '@/domain/agenda'
+import { closePeople, matchesAudience, type AgendaItem } from '@/domain/agenda'
 import { buildComingUpSnapshot } from '@/domain/widget'
 
 const agenda: AgendaItem[] = [
@@ -42,7 +42,7 @@ const agenda: AgendaItem[] = [
 
 function build(filters: AgendaItem['kind'][] | [], hideNames: boolean) {
   return buildComingUpSnapshot(agenda, {
-    preferences: { filters: filters as never, hideNames },
+    preferences: { filters: filters as never, hideNames, audience: 'everyone' },
     hideNames,
     describe: (item) => ({
       title: `${item.id} title`,
@@ -110,5 +110,54 @@ describe('widget links', () => {
     expect(routeForDeepLink('kindy://people/../settings')).toBeNull()
     expect(routeForDeepLink('https://evil.example/people/x')).toBeNull()
     expect(routeForDeepLink('not a url')).toBeNull()
+  })
+})
+
+describe('close people', () => {
+  const close = new Set(['me', 'emma'])
+  const item = (kind: AgendaItem['kind'], personIds: string[]): AgendaItem => ({
+    id: `${kind}-${personIds.join()}`,
+    kind,
+    date: '2026-10-20',
+    daysFromToday: 2,
+    personIds,
+  })
+
+  it('shows birthdays of close people only', () => {
+    expect(matchesAudience(item('birthday', ['emma']), 'close', close)).toBe(true)
+    expect(matchesAudience(item('birthday', ['plumber']), 'close', close)).toBe(false)
+    expect(matchesAudience(item('birthday', ['plumber']), 'everyone', close)).toBe(true)
+  })
+
+  it('always shows appointments and memos', () => {
+    expect(matchesAudience(item('appointment', ['plumber']), 'close', close)).toBe(true)
+    expect(matchesAudience(item('reminder', []), 'close', close)).toBe(true)
+  })
+
+  it('shows everyone until someone is marked close', () => {
+    expect(matchesAudience(item('birthday', ['plumber']), 'close', new Set(['me']))).toBe(true)
+  })
+
+  it('counts favourites, circle members and the user’s own connections as close', () => {
+    const base = {
+      isArchived: false,
+      isDeceased: false,
+      contactPoints: [],
+      details: [],
+      createdAt: 0,
+      updatedAt: 0,
+    }
+    const result = closePeople({
+      people: [
+        { ...base, id: 'me', displayName: 'Me', isSelf: true, isFavorite: false },
+        { ...base, id: 'fav', displayName: 'Fav', isFavorite: true },
+        { ...base, id: 'club', displayName: 'Club', isFavorite: false },
+        { ...base, id: 'kid', displayName: 'Kid', isFavorite: false },
+        { ...base, id: 'plumber', displayName: 'Plumber', isFavorite: false },
+      ],
+      memberships: [{ circleId: 'c', personId: 'club' }],
+      relationships: [{ id: 'r', fromPersonId: 'me', toPersonId: 'kid', type: 'parent-of' }],
+    })
+    expect([...result].sort()).toEqual(['club', 'fav', 'kid', 'me'])
   })
 })

@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 import { App as CapacitorApp } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 
-import { buildAgenda, calendarDay } from '@/domain/agenda'
+import { buildAgenda, calendarDay, closePeople } from '@/domain/agenda'
 import type { AgendaDraft } from '@/domain/agendaDraft'
 import { createBackup, isWorthBackingUp, readBackup } from '@/domain/backup'
 import { sameOccurrence, suggestCalendarLinks, type DeviceCalendarEvent } from '@/domain/calendar'
@@ -19,6 +19,7 @@ import { normalizeContactLabel } from '@/domain/contactLabels'
 import { effectiveEvents, isWeddingDay } from '@/domain/events'
 import { applyRemoteContact } from '@/domain/incomingContacts'
 import { safeWebUrl } from '@/domain/links'
+import { homeCallingCode as callingCodeFor } from '@/domain/phone'
 import {
   KINDY_SCHEMA_VERSION,
   type Circle,
@@ -288,6 +289,17 @@ export const useKindyStore = defineStore('kindy', () => {
         )
       : [],
   )
+  /** The country code for numbers saved without one ("06 …"), for WhatsApp links. */
+  const homeCallingCode = computed(() =>
+    callingCodeFor(
+      (selfPerson.value?.contactPoints ?? [])
+        .filter((point) => point.kind === 'phone')
+        .map((point) => point.value),
+      typeof navigator === 'undefined' ? undefined : navigator.language,
+    ),
+  )
+  /** Favourites, circle members and the user's own family: whose dates matter most. */
+  const closePeopleIds = computed(() => (data.value ? closePeople(data.value) : new Set<string>()))
   /** From a week ago up to (not including) the same day next year; views narrow it further. */
   const agenda = computed(() =>
     data.value ? buildAgenda(data.value, today.value, { daysBack: 7, daysAhead: 364 }) : [],
@@ -1502,6 +1514,8 @@ export const useKindyStore = defineStore('kindy', () => {
     data,
     account,
     busy,
+    closePeopleIds,
+    homeCallingCode,
     connectGoogle,
     disconnectGoogle,
     wipeAccount,

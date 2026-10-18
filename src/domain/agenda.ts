@@ -291,3 +291,47 @@ export function matchesAgendaFilters(
 ): boolean {
   return selected.size === 0 || selected.has(agendaFilterFor(item.kind))
 }
+
+/** Who Upcoming and the widget show dates for: the people close to you, or everyone. */
+export type AgendaAudience = 'close' | 'everyone'
+
+/**
+ * The people close to the user: themselves, favourites, members of a circle,
+ * and their own family and friends (everyone linked to "me"). With hundreds of
+ * contacts, these are the dates that matter.
+ */
+export function closePeople(
+  data: Pick<KindyData, 'people' | 'memberships' | 'relationships'>,
+): Set<EntityId> {
+  const close = new Set<EntityId>()
+  const self = data.people.find((person) => person.isSelf && !person.deletedAt)
+  for (const person of data.people) {
+    if (person.isSelf || person.isFavorite) close.add(person.id)
+  }
+  for (const membership of data.memberships) {
+    if (!membership.endedOn) close.add(membership.personId)
+  }
+  if (self) {
+    for (const relationship of data.relationships) {
+      if (relationship.endedOn) continue
+      if (relationship.fromPersonId === self.id) close.add(relationship.toPersonId)
+      if (relationship.toPersonId === self.id) close.add(relationship.fromPersonId)
+    }
+  }
+  return close
+}
+
+/**
+ * Appointments, memos and dates the user added always show; birthdays and
+ * other contact dates only for close people. Without anyone marked close yet
+ * (no favourites, circles or family), everyone is shown.
+ */
+export function matchesAudience(
+  item: AgendaItem,
+  audience: AgendaAudience,
+  close: ReadonlySet<EntityId>,
+): boolean {
+  if (audience === 'everyone' || close.size <= 1) return true
+  if (item.kind === 'appointment' || item.kind === 'reminder' || item.kind === 'custom') return true
+  return item.personIds.some((personId) => close.has(personId))
+}

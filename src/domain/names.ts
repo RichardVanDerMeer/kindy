@@ -57,3 +57,16 @@ export function sortByName(people: Person[], order: NameOrder, locale?: string):
     key(left).localeCompare(key(right), locale, { sensitivity: 'base' }),
   )
 }
+
+/**
+ * The index letter a person is listed under, following the same order as
+ * `sortByName`: accents are dropped, and anything that is not A–Z is "#".
+ */
+export function sortLetter(person: Person, order: NameOrder): string {
+  const key =
+    order === 'family-first' && person.familyName?.trim()
+      ? familySortKey(person.familyName)
+      : person.displayName
+  const letter = key.trim().normalize('NFD').replace(/[̀-ͯ]/g, '').charAt(0).toLocaleUpperCase()
+  return /^[A-Z]$/.test(letter) ? letter : '#'
+}

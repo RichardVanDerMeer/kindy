@@ -61,6 +61,7 @@ import { socialDisplay, socialUrl } from '@/domain/social'
 import type { PartialDate, Person, RelationshipRole } from '@/domain/model'
 import { connectedPersonId } from '@/domain/relationships'
 import { personTimeline, type TimelineEntry } from '@/domain/timeline'
+import { whatsappLink } from '@/domain/phone'
 import { useKindyStore } from '@/stores/kindy'
 import { useToastStore } from '@/stores/toast'
 
@@ -327,8 +328,9 @@ function entryDate(entry: TimelineEntry): string {
   )
 }
 
+/** WhatsApp needs the number with its country code: "06 …" becomes "316 …". */
 function whatsapp(value: string): string {
-  return `https://wa.me/${value.replace(/[^\d]/g, '')}`
+  return whatsappLink(value, store.homeCallingCode) ?? `https://wa.me/`
 }
 
 function timelineTitle(entry: TimelineEntry): string {

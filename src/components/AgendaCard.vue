@@ -28,6 +28,7 @@ import {
 import { agendaFilterFor, type AgendaItem } from '@/domain/agenda'
 import type { Person } from '@/domain/model'
 import { useEditorsStore } from '@/stores/editors'
+import { whatsappLink } from '@/domain/phone'
 import { useKindyStore } from '@/stores/kindy'
 
 import PersonAvatar from './PersonAvatar.vue'
@@ -130,7 +131,9 @@ function contact(kind: 'phone' | 'email'): string | undefined {
 const reachable = computed(() => props.item.daysFromToday <= 7 && !primary.value?.isDeceased)
 const phone = computed(() => (reachable.value ? contact('phone') : undefined))
 const email = computed(() => (reachable.value ? contact('email') : undefined))
-const whatsappNumber = computed(() => phone.value?.replace(/[^\d]/g, ''))
+const whatsappHref = computed(() =>
+  phone.value ? whatsappLink(phone.value, store.homeCallingCode) : undefined,
+)
 /** Without other buttons the gift sits next to the circle, and the card stays one row high. */
 const hasContactActions = computed(() => Boolean(phone.value || email.value || editable.value))
 const giftInRow = computed(() => !props.compact && openWishes.value > 0 && !hasContactActions.value)
@@ -275,9 +278,9 @@ function open(): void {
         <span>{{ t('upcoming.actionCall') }}</span>
       </a>
       <a
-        v-if="whatsappNumber"
+        v-if="whatsappHref"
         class="contact-action contact-action--whatsapp"
-        :href="`https://wa.me/${whatsappNumber}`"
+        :href="whatsappHref"
         target="_blank"
         rel="noopener"
         :aria-label="t('upcoming.whatsapp', { name: primary && firstName(primary) })"

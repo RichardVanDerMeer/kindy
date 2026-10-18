@@ -41,7 +41,14 @@ const toneClass = computed(() => {
     role="img"
     :aria-label="name"
   >
-    <img v-if="photoSrc" :src="photoSrc" alt="" @error="onPhotoError" />
+    <img
+      v-if="photoSrc"
+      :src="photoSrc"
+      alt=""
+      loading="lazy"
+      decoding="async"
+      @error="onPhotoError"
+    />
     <span v-else aria-hidden="true">{{ initials }}</span>
   </span>
 </template>

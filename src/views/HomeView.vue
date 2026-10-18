@@ -10,9 +10,12 @@ import PersonAvatar from '@/components/PersonAvatar.vue'
 import RestoreBackupDialog from '@/components/RestoreBackupDialog.vue'
 import ViewHeader from '@/components/ViewHeader.vue'
 import type { Person } from '@/domain/model'
+import { matchesAudience } from '@/domain/agenda'
 import { useKindyStore } from '@/stores/kindy'
+import { usePreferencesStore } from '@/stores/preferences'
 
 const store = useKindyStore()
+const preferences = usePreferencesStore()
 const router = useRouter()
 const { t } = useI18n()
 const query = ref('')
@@ -33,8 +36,21 @@ const greeting = computed(() => {
 
 /** Today plus the coming two weeks; the Upcoming view shows the rest. */
 const upcoming = computed(() =>
-  store.agenda.filter((item) => item.daysFromToday >= 0 && item.daysFromToday <= 14).slice(0, 4),
+  store.agenda
+    .filter((item) => item.daysFromToday >= 0 && item.daysFromToday <= 14)
+    .filter((item) => matchesAudience(item, preferences.agendaAudience, store.closePeopleIds))
+    .slice(0, 4),
 )
+
+/** First names, with a last-name initial when two favourites share one ("Lotte B."). */
+function favoriteName(person: Person): string {
+  const first = person.givenName ?? person.displayName
+  const shared = store.favoritePeople.some(
+    (other) => other.id !== person.id && (other.givenName ?? other.displayName) === first,
+  )
+  const initial = person.familyName?.trim().split(/\s+/).at(-1)?.charAt(0)
+  return shared && initial ? `${first} ${initial}.` : first
+}
 
 function subtitle(person: Person): string {
   return store
@@ -145,7 +161,8 @@ function subtitle(person: Person): string {
             {{ $t('home.seeAll') }} <ChevronRight :size="16" />
           </RouterLink>
         </header>
-        <div v-if="store.favoritePeople.length" class="scroll-row favorite-people">
+        <!-- All favourites at once, five per row: it is the last block, so it may grow. -->
+        <div v-if="store.favoritePeople.length" class="favorite-grid">
           <button
             v-for="person in store.favoritePeople"
             :key="person.id"
@@ -158,7 +175,7 @@ function subtitle(person: Person): string {
               :deceased="person.isDeceased"
               size="medium"
             />
-            <span>{{ person.givenName ?? person.displayName }}</span>
+            <span>{{ favoriteName(person) }}</span>
           </button>
         </div>
         <p v-else class="empty-copy card">{{ $t('home.noFavoritePeople') }}</p>

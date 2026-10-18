@@ -1,4 +1,11 @@
-import { agendaFilterFor, matchesAgendaFilters, type AgendaFilter, type AgendaItem } from './agenda'
+import {
+  agendaFilterFor,
+  matchesAgendaFilters,
+  matchesAudience,
+  type AgendaAudience,
+  type AgendaFilter,
+  type AgendaItem,
+} from './agenda'
 
 /** What the "Coming up" home-screen widget shows; written by the app, read by Android. */
 export interface ComingUpSnapshot {
@@ -27,9 +34,15 @@ export interface ComingUpPreferences {
   /** Empty means everything, like "All" in Upcoming. */
   filters: AgendaFilter[]
   hideNames: boolean
+  /** Contact dates for close people only, or for everyone. */
+  audience: AgendaAudience
 }
 
-export const defaultComingUpPreferences: ComingUpPreferences = { filters: [], hideNames: false }
+export const defaultComingUpPreferences: ComingUpPreferences = {
+  filters: [],
+  hideNames: false,
+  audience: 'close',
+}
 
 /** Two months ahead; the widget scrolls and drops past days itself. */
 const MAX_ITEMS = 40
@@ -45,6 +58,8 @@ export function buildComingUpSnapshot(
   options: {
     preferences: ComingUpPreferences
     hideNames: boolean
+    /** The close people, for the "close" audience. */
+    close?: ReadonlySet<string>
     describe: (item: AgendaItem) => { title: string; detail: string; personId?: string }
     genericTitle: (filter: AgendaFilter) => string
     heading: string
@@ -58,6 +73,9 @@ export function buildComingUpSnapshot(
   const items = agenda
     .filter((item) => item.daysFromToday >= 0 && item.daysFromToday <= DAYS_AHEAD && !item.done)
     .filter((item) => matchesAgendaFilters(item, selected))
+    .filter((item) =>
+      matchesAudience(item, options.preferences.audience ?? 'close', options.close ?? new Set()),
+    )
     .slice(0, MAX_ITEMS)
     .map((item): ComingUpWidgetItem => {
       const kind = agendaFilterFor(item.kind)

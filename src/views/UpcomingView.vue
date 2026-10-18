@@ -12,13 +12,16 @@ import ViewHeader from '@/components/ViewHeader.vue'
 import {
   agendaFilters,
   matchesAgendaFilters,
+  matchesAudience,
   toggleAgendaFilter,
   type AgendaFilter,
   type AgendaItem,
 } from '@/domain/agenda'
 import { useKindyStore } from '@/stores/kindy'
+import { usePreferencesStore } from '@/stores/preferences'
 
 const store = useKindyStore()
+const preferences = usePreferencesStore()
 const { t, locale } = useI18n()
 
 /** Empty means "all". */
@@ -43,9 +46,17 @@ function toggle(filter: AgendaFilter): void {
   selected.value = toggleAgendaFilter(selected.value, filter)
 }
 
+/** Six weeks first; "Show more" adds two months at a time, so a full year never renders at once. */
+const FIRST_DAYS = 42
+const MORE_DAYS = 61
+const horizon = ref(FIRST_DAYS)
+
 const visible = computed(() =>
-  store.agenda.filter((item) => matchesAgendaFilters(item, selected.value)),
+  store.agenda
+    .filter((item) => matchesAgendaFilters(item, selected.value))
+    .filter((item) => matchesAudience(item, preferences.agendaAudience, store.closePeopleIds)),
 )
+const later = computed(() => visible.value.filter((item) => item.daysFromToday > horizon.value))
 const earlier = computed(() => visible.value.filter((item) => item.daysFromToday < 0))
 
 /** Groups: today, the rest of this week, then one group per month. */
@@ -57,7 +68,7 @@ const groups = computed(() => {
     else result.push({ key, label, items: [item] })
   }
   for (const item of visible.value) {
-    if (item.daysFromToday < 0) continue
+    if (item.daysFromToday < 0 || item.daysFromToday > horizon.value) continue
     if (item.daysFromToday === 0) push('today', t('upcoming.today'), item)
     else if (item.daysFromToday <= 7) push('week', t('upcoming.thisWeek'), item)
     else {
@@ -103,6 +114,23 @@ const groups = computed(() => {
       <Link2 :size="16" /> {{ $t('calendar.linkOther') }}
     </button>
     <LinkCalendarEventDialog :open="showLinkEvent" @close="showLinkEvent = false" />
+
+    <div
+      class="segmented upcoming-audience"
+      role="radiogroup"
+      :aria-label="$t('upcoming.audience')"
+    >
+      <button
+        v-for="audience in ['close', 'everyone'] as const"
+        :key="audience"
+        role="radio"
+        :aria-checked="preferences.agendaAudience === audience"
+        :class="{ active: preferences.agendaAudience === audience }"
+        @click="preferences.setAgendaAudience(audience)"
+      >
+        {{ $t(`upcoming.audiences.${audience}`) }}
+      </button>
+    </div>
 
     <div class="filter-row" role="group" :aria-label="$t('upcoming.title')">
       <button
@@ -151,6 +179,12 @@ const groups = computed(() => {
         <AgendaCard v-for="item in group.items" :key="item.id" :item="item" />
       </div>
     </section>
+
+    <button v-if="later.length" class="earlier-toggle show-more" @click="horizon += MORE_DAYS">
+      <ChevronDown :size="16" />
+      {{ $t('upcoming.showMore') }}
+      <span class="earlier-toggle__count">{{ later.length }}</span>
+    </button>
 
     <div v-if="!groups.length" class="empty-state card">
       <h2>{{ $t('upcoming.empty') }}</h2>

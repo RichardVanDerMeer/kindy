@@ -1675,6 +1675,82 @@ button.connection-person:focus-visible {
   accent-color: var(--color-primary);
 }
 
+.upcoming-audience {
+  margin: 0 0 var(--space-3);
+}
+
+.show-more {
+  margin: var(--space-2) auto var(--space-6);
+}
+
+/* People: letter headings and an A–Z rail for long lists */
+.letter-heading {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  margin: var(--space-3) 0 0;
+  padding: 6px 4px;
+  background: linear-gradient(var(--color-background, #faf7fc) 70%, transparent);
+  color: var(--color-primary-strong);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.person-list--rail {
+  padding-right: 22px;
+}
+
+.letter-rail {
+  position: fixed;
+  z-index: 4;
+  top: 50%;
+  right: max(calc((100vw - 540px) / 2 + 2px), 2px);
+  display: flex;
+  flex-direction: column;
+  padding: 6px 2px;
+  border-radius: 999px;
+  background: rgba(255, 253, 253, 0.85);
+  box-shadow: 0 4px 16px rgba(44, 24, 91, 0.1);
+  transform: translateY(-50%);
+  touch-action: none;
+}
+
+.letter-rail button {
+  min-width: 22px;
+  padding: 1px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary-strong);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+/* Favourite people on Home: a grid of five per row, no sideways scrolling */
+.favorite-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-2) 4px;
+  padding: var(--space-3) var(--space-2);
+  border-radius: var(--radius-medium);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.favorite-grid .favorite-person {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-1, 4px) 0;
+  font-size: 0.78rem;
+}
+
+.favorite-grid .avatar--medium {
+  width: min(56px, 100%);
+  height: auto;
+  aspect-ratio: 1;
+}
+
 /* Feedback and motion: every tap answers at once (reduced motion is honoured below) */
 
 .activity-bar {

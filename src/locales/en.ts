@@ -39,6 +39,7 @@ export default {
     connectRestore: 'Or restore a backup from Google Drive',
   },
   people: {
+    letters: 'Jump to letter',
     title: 'Your people',
     searchPlaceholder: 'Search people or details',
     all: 'All',
@@ -206,6 +207,10 @@ export default {
     noMembers: 'Nobody in this circle yet.',
   },
   upcoming: {
+    audience: 'For whom',
+    audiences: { close: 'Close', everyone: 'Everyone' },
+    showMore: 'Show more',
+    audienceHint: 'Close: favourites, circles and your own family and friends.',
     title: 'Coming up',
     empty: 'Nothing matches these filters',
     today: 'Today',

@@ -40,6 +40,7 @@ export default {
     connectRestore: 'Of herstel een back-up uit Google Drive',
   },
   people: {
+    letters: 'Spring naar letter',
     title: 'Jouw mensen',
     searchPlaceholder: 'Zoek mensen of details',
     all: 'Alles',
@@ -207,6 +208,10 @@ export default {
     noMembers: 'Nog niemand in deze kring.',
   },
   upcoming: {
+    audience: 'Voor wie',
+    audiences: { close: 'Dichtbij', everyone: 'Iedereen' },
+    showMore: 'Meer tonen',
+    audienceHint: 'Dichtbij: favorieten, kringen en je eigen familie en vrienden.',
     title: 'Binnenkort',
     empty: 'Niets gevonden met deze filters',
     today: 'Vandaag',
