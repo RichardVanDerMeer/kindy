@@ -6,6 +6,8 @@ import {
   BriefcaseBusiness,
   Cake,
   CalendarClock,
+  ContactRound,
+  Image as ImageIcon,
   CalendarDays,
   CalendarPlus,
   ChevronDown,
@@ -32,6 +34,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import AddAgendaItemDialog from '@/components/AddAgendaItemDialog.vue'
+import CoverPickerDialog from '@/components/CoverPickerDialog.vue'
 import AddConnectionDialog, { type ConnectionDraft } from '@/components/AddConnectionDialog.vue'
 import AgendaCard from '@/components/AgendaCard.vue'
 import AddNoteDialog from '@/components/AddNoteDialog.vue'
@@ -98,6 +101,12 @@ async function removeNote(noteId: string): Promise<void> {
   await store.removeNote(noteId)
 }
 const showEdit = ref(false)
+const showCover = ref(false)
+
+async function chooseCover(coverRef: string | undefined): Promise<void> {
+  showCover.value = false
+  await store.setCover(props.id, coverRef)
+}
 const showAddDate = ref(false)
 const addDateError = ref<string>()
 /** Removing a date takes two taps: the first asks for confirmation. */
@@ -438,71 +447,99 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
 
 <template>
   <section v-if="person" class="view profile-view">
-    <header class="profile-toolbar">
-      <button class="icon-button" :aria-label="$t('common.back')" @click="router.back()">
-        <ArrowLeft :size="24" />
-      </button>
-      <button class="icon-button" :aria-label="$t('profile.edit')" @click="showEdit = true">
-        <Pencil :size="21" />
-      </button>
-    </header>
-
-    <div class="profile-hero">
-      <button class="avatar-button" :aria-label="$t('edit.photo')" @click="showEdit = true">
-        <PersonAvatar
-          :name="person.displayName"
-          :photo-ref="person.photoRef"
-          :deceased="person.isDeceased"
-          size="large"
-        />
-      </button>
-      <div class="profile-hero__copy">
-        <div class="profile-name-row">
-          <h1>{{ person.displayName }}</h1>
-          <button
-            v-if="!person.isSelf"
-            class="icon-button icon-button--star"
-            :aria-label="$t('profile.favorite')"
-            :aria-pressed="person.isFavorite"
-            @click="store.toggleFavorite(person.id)"
-          >
-            <Star :size="25" :fill="person.isFavorite ? 'currentColor' : 'none'" />
-          </button>
-        </div>
-        <div v-if="person.isDeceased" class="memorial-status">
-          <Sparkles :size="15" />
-          <span>{{ $t('memorial.inMemory') }}</span>
-          <template v-if="person.deathDate">
-            <span aria-hidden="true">·</span>
-            <span>{{ formatDate(person.deathDate) }}</span>
-          </template>
-        </div>
-        <span v-if="birthdayToday" class="self-pill self-pill--birthday">
-          <Cake :size="15" /> {{ $t('profile.birthdayToday') }}
-        </span>
-        <span v-else-if="person.isSelf" class="self-pill">
-          <UserRoundCheck :size="15" /> {{ $t('profile.thisIsYou') }}
-        </span>
-        <button
-          v-else-if="!store.selfPerson"
-          class="self-pill self-pill--action"
-          @click="store.setSelf(person.id)"
-        >
-          <UserRoundCheck :size="15" /> {{ $t('profile.markAsMe') }}
+    <!-- The header picture spans toolbar and hero; it is Kindy's own, not Google's. -->
+    <div
+      class="profile-header"
+      :class="{ 'profile-header--cover': person.coverRef }"
+      :style="
+        person.coverRef ? { '--cover': `url(${JSON.stringify(person.coverRef)})` } : undefined
+      "
+    >
+      <header class="profile-toolbar">
+        <button class="icon-button" :aria-label="$t('common.back')" @click="router.back()">
+          <ArrowLeft :size="24" />
         </button>
-        <div class="filter-row profile-circles">
-          <RouterLink
-            v-for="membership in circles"
-            :key="membership.circleId"
-            class="chip"
-            :class="`chip--${membership.circle?.colorToken ?? 'neutral'}`"
-            :to="`/circles/${membership.circleId}`"
+        <span class="profile-toolbar__actions">
+          <button
+            class="icon-button"
+            :aria-label="$t('cover.title')"
+            :title="$t('cover.title')"
+            @click="showCover = true"
           >
-            {{ membership.circle?.name }}
-          </RouterLink>
-          <button class="chip chip--add" @click="showCirclePicker = true">
-            <Plus :size="16" /> {{ $t('profile.addCircle') }}
+            <ImageIcon :size="21" />
           </button>
+          <button
+            v-if="store.linkedToGoogle(person.id)"
+            class="icon-button"
+            :aria-label="$t('profile.openInContacts')"
+            :title="$t('profile.openInContacts')"
+            v-async-click="() => store.openInContacts(person!.id)"
+          >
+            <ContactRound :size="21" />
+          </button>
+          <button class="icon-button" :aria-label="$t('profile.edit')" @click="showEdit = true">
+            <Pencil :size="21" />
+          </button>
+        </span>
+      </header>
+
+      <div class="profile-hero">
+        <button class="avatar-button" :aria-label="$t('edit.photo')" @click="showEdit = true">
+          <PersonAvatar
+            :name="person.displayName"
+            :photo-ref="person.photoRef"
+            :deceased="person.isDeceased"
+            size="large"
+          />
+        </button>
+        <div class="profile-hero__copy">
+          <div class="profile-name-row">
+            <h1>{{ person.displayName }}</h1>
+            <button
+              v-if="!person.isSelf"
+              class="icon-button icon-button--star"
+              :aria-label="$t('profile.favorite')"
+              :aria-pressed="person.isFavorite"
+              @click="store.toggleFavorite(person.id)"
+            >
+              <Star :size="25" :fill="person.isFavorite ? 'currentColor' : 'none'" />
+            </button>
+          </div>
+          <div v-if="person.isDeceased" class="memorial-status">
+            <Sparkles :size="15" />
+            <span>{{ $t('memorial.inMemory') }}</span>
+            <template v-if="person.deathDate">
+              <span aria-hidden="true">·</span>
+              <span>{{ formatDate(person.deathDate) }}</span>
+            </template>
+          </div>
+          <span v-if="birthdayToday" class="self-pill self-pill--birthday">
+            <Cake :size="15" /> {{ $t('profile.birthdayToday') }}
+          </span>
+          <span v-else-if="person.isSelf" class="self-pill">
+            <UserRoundCheck :size="15" /> {{ $t('profile.thisIsYou') }}
+          </span>
+          <button
+            v-else-if="!store.selfPerson"
+            class="self-pill self-pill--action"
+            @click="store.setSelf(person.id)"
+          >
+            <UserRoundCheck :size="15" /> {{ $t('profile.markAsMe') }}
+          </button>
+          <div class="filter-row profile-circles">
+            <RouterLink
+              v-for="membership in circles"
+              :key="membership.circleId"
+              class="chip"
+              :class="`chip--${membership.circle?.colorToken ?? 'neutral'}`"
+              :to="`/circles/${membership.circleId}`"
+            >
+              {{ membership.circle?.name }}
+            </RouterLink>
+            <button class="chip chip--add" @click="showCirclePicker = true">
+              <Plus :size="16" /> {{ $t('profile.addCircle') }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -913,6 +950,12 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
       :selected-ids="circles.map((membership) => membership.circleId)"
       @close="showCirclePicker = false"
       @save="saveCircles"
+    />
+    <CoverPickerDialog
+      :open="showCover"
+      :current="person.coverRef"
+      @close="showCover = false"
+      @choose="chooseCover"
     />
     <AddConnectionDialog
       :open="showAddConnection"

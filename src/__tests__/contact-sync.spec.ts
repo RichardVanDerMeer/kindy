@@ -224,6 +224,9 @@ class FakeGoogle implements ExternalContactsGateway {
   connected = true
 
   useAccount() {}
+  async openContact() {
+    return 'app' as const
+  }
   async getConnection() {
     return null
   }

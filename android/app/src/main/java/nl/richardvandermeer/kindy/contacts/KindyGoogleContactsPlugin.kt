@@ -1,25 +1,39 @@
 package nl.richardvandermeer.kindy.contacts
 
+import android.Manifest
 import android.accounts.Account
 import android.app.Activity
 import android.content.Intent
 import android.content.IntentSender
+import android.content.ContentUris
 import android.net.Uri
+import android.provider.ContactsContract
+import com.getcapacitor.PermissionState
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
+import com.getcapacitor.annotation.Permission
+import com.getcapacitor.annotation.PermissionCallback
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.AuthorizationResult
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.auth.api.identity.RevokeAccessRequest
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
+import java.math.BigInteger
 import java.net.HttpURLConnection
 import java.net.URL
 
-@CapacitorPlugin(name = "KindyGoogleContacts", requestCodes = [AUTHORIZATION_REQUEST_CODE])
+@CapacitorPlugin(
+    name = "KindyGoogleContacts",
+    requestCodes = [AUTHORIZATION_REQUEST_CODE],
+    permissions = [
+        // Only to find a contact in the phone's address book and open it there.
+        Permission(alias = CONTACTS_ALIAS, strings = [Manifest.permission.READ_CONTACTS]),
+    ],
+)
 class KindyGoogleContactsPlugin : Plugin() {
     private var accessToken: String? = null
     private var account: Account? = null
@@ -346,6 +360,73 @@ class KindyGoogleContactsPlugin : Plugin() {
         }
     }
 
+    /**
+     * Opens a Google contact in the phone's Contacts app. Android keeps the
+     * Google contact id as a hexadecimal source id; the People API writes the
+     * same number in decimal ("people/c<decimal>"). Without the contact on the
+     * phone (or without permission), Google Contacts opens on the web.
+     */
+    @PluginMethod
+    fun openContact(call: PluginCall) {
+        if (requireResourceName(call) == null) return
+        if (getPermissionState(CONTACTS_ALIAS) != PermissionState.GRANTED) {
+            requestPermissionForAlias(CONTACTS_ALIAS, call, "contactsPermissionCallback")
+            return
+        }
+        openContactNow(call)
+    }
+
+    @PermissionCallback
+    private fun contactsPermissionCallback(call: PluginCall) {
+        openContactNow(call)
+    }
+
+    private fun openContactNow(call: PluginCall) {
+        val resourceName = call.getString("resourceName") ?: return
+        val decimal = resourceName.removePrefix("people/c")
+        val contactId = if (getPermissionState(CONTACTS_ALIAS) == PermissionState.GRANTED) {
+            findContactId(decimal, call.getString("accountEmail"))
+        } else {
+            null
+        }
+        try {
+            val intent = if (contactId != null) {
+                Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, contactId))
+            } else {
+                val web = Uri.parse("https://contacts.google.com/person/c$decimal").buildUpon()
+                call.getString("accountEmail")?.let { web.appendQueryParameter("authuser", it) }
+                Intent(Intent.ACTION_VIEW, web.build())
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            call.resolve(JSObject().apply { put("opened", if (contactId != null) "app" else "web") })
+        } catch (error: Exception) {
+            call.reject("Unable to open the contact", error)
+        }
+    }
+
+    private fun findContactId(decimal: String, accountEmail: String?): Long? {
+        val hex = try {
+            BigInteger(decimal).toString(16)
+        } catch (error: NumberFormatException) {
+            return null
+        }
+        val selection = buildString {
+            append("${ContactsContract.RawContacts.ACCOUNT_TYPE} = ? AND ")
+            append("${ContactsContract.RawContacts.DELETED} = 0 AND ")
+            append("(${ContactsContract.RawContacts.SOURCE_ID} = ? OR ${ContactsContract.RawContacts.SOURCE_ID} = ?)")
+            if (accountEmail != null) append(" AND ${ContactsContract.RawContacts.ACCOUNT_NAME} = ?")
+        }
+        val args = listOfNotNull(GOOGLE_ACCOUNT_TYPE, hex, hex.padStart(16, '0'), accountEmail).toTypedArray()
+        return context.contentResolver.query(
+            ContactsContract.RawContacts.CONTENT_URI,
+            arrayOf(ContactsContract.RawContacts.CONTACT_ID),
+            selection,
+            args,
+            null,
+        )?.use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else null }
+    }
+
     /** Drops the token without revoking anything, e.g. when Google returned an unexpected account. */
     @PluginMethod
     fun forget(call: PluginCall) {
@@ -487,6 +568,7 @@ class KindyGoogleContactsPlugin : Plugin() {
 
 private const val AUTHORIZATION_REQUEST_CODE = 9412
 private const val GOOGLE_ACCOUNT_TYPE = "com.google"
+private const val CONTACTS_ALIAS = "contacts"
 private const val CONTACTS_SCOPE = "https://www.googleapis.com/auth/contacts"
 private const val PEOPLE_API_URL = "https://people.googleapis.com/v1"
 private const val USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"

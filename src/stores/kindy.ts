@@ -1217,6 +1217,28 @@ export const useKindyStore = defineStore('kindy', () => {
     })
   }
 
+  /** Sets or clears the profile's header picture; it stays in Kindy. */
+  async function setCover(personId: string, coverRef: string | undefined): Promise<void> {
+    await mutate((draft) => {
+      const person = draft.people.find((candidate) => candidate.id === personId)
+      if (!person) return
+      person.coverRef = coverRef
+      person.updatedAt = Date.now()
+    })
+  }
+
+  /** Opens the person's Google contact in the phone's Contacts app. */
+  async function openInContacts(personId: string): Promise<void> {
+    const identity = data.value?.externalIdentities.find(
+      (candidate) =>
+        candidate.personId === personId &&
+        candidate.provider === 'google' &&
+        !candidate.remoteDeletedAt,
+    )
+    if (!identity) return
+    await getGoogleContactsGateway().openContact(identity.providerResourceId)
+  }
+
   /** Opens a linked appointment in the phone's calendar app. */
   async function openInCalendar(linkId: string): Promise<void> {
     const link = data.value?.calendarLinks.find((candidate) => candidate.id === linkId)
@@ -1573,6 +1595,8 @@ export const useKindyStore = defineStore('kindy', () => {
     linkCalendarEvent,
     ignoreCalendarEvent,
     openInCalendar,
+    openInContacts,
+    setCover,
     unlinkCalendarEvent,
     dismissCalendarPrompt,
     linkEventToPerson,

@@ -55,6 +55,7 @@ export default {
     cancel: 'Annuleren',
   },
   profile: {
+    openInContacts: 'Openen in Contacten',
     overview: 'Overzicht',
     notes: 'Notities',
     connections: 'Connecties',
@@ -619,6 +620,12 @@ export default {
     hint: 'Sleep om te verplaatsen, knijp of schuif om in te zoomen.',
     zoom: 'Zoom',
     use: 'Gebruiken',
+  },
+  cover: {
+    title: 'Headerafbeelding',
+    hint: 'Kies een achtergrond voor bovenaan dit profiel. Deze blijft in Kindy.',
+    ownPhoto: 'Eigen foto kiezen',
+    none: 'Geen afbeelding',
   },
   common: {
     saveFailed: 'Opslaan is niet gelukt. Probeer het opnieuw.',

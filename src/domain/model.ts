@@ -34,6 +34,8 @@ export interface Person {
   nickname?: string
   pronouns?: string
   photoRef?: string
+  /** Header picture on the profile; Kindy's own, never sent to Google. */
+  coverRef?: string
   /** Marks the person who uses Kindy ("Mij"). At most one person carries this flag. */
   isSelf?: boolean
   isFavorite: boolean

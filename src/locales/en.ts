@@ -54,6 +54,7 @@ export default {
     cancel: 'Cancel',
   },
   profile: {
+    openInContacts: 'Open in Contacts',
     overview: 'Overview',
     notes: 'Notes',
     connections: 'Connections',
@@ -618,6 +619,12 @@ export default {
     hint: 'Drag to move, pinch or slide to zoom.',
     zoom: 'Zoom',
     use: 'Use photo',
+  },
+  cover: {
+    title: 'Header picture',
+    hint: 'Choose a background for the top of this profile. It stays in Kindy.',
+    ownPhoto: 'Choose own photo',
+    none: 'No picture',
   },
   common: {
     saveFailed: 'Saving did not work. Please try again.',

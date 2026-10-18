@@ -151,6 +151,7 @@ export class SqliteKindyRepository implements KindyRepository {
       nickname: optionalString(row.nickname),
       pronouns: optionalString(row.pronouns),
       photoRef: optionalString(row.photo_ref),
+      coverRef: optionalString(row.cover_ref),
       isSelf: bool(row.is_self) || undefined,
       isFavorite: bool(row.is_favorite),
       isArchived: bool(row.is_archived),
@@ -754,9 +755,9 @@ export class SqliteKindyRepository implements KindyRepository {
   private writePerson(person: Person, set: capSQLiteSet[]): void {
     this.add(
       set,
-      `INSERT INTO people(id,display_name,given_name,middle_name,family_name,nickname,pronouns,photo_ref,is_self,is_favorite,is_archived,is_deceased,sync_exclusions_json,birth_year,birth_month,birth_day,death_year,death_month,death_day,memorial_note,about,jobs_json,how_we_met,created_at,updated_at,deleted_at)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-       ON CONFLICT(id) DO UPDATE SET display_name=excluded.display_name,given_name=excluded.given_name,middle_name=excluded.middle_name,family_name=excluded.family_name,nickname=excluded.nickname,pronouns=excluded.pronouns,photo_ref=excluded.photo_ref,is_self=excluded.is_self,is_favorite=excluded.is_favorite,is_archived=excluded.is_archived,is_deceased=excluded.is_deceased,sync_exclusions_json=excluded.sync_exclusions_json,birth_year=excluded.birth_year,birth_month=excluded.birth_month,birth_day=excluded.birth_day,death_year=excluded.death_year,death_month=excluded.death_month,death_day=excluded.death_day,memorial_note=excluded.memorial_note,about=excluded.about,jobs_json=excluded.jobs_json,how_we_met=excluded.how_we_met,updated_at=excluded.updated_at,deleted_at=excluded.deleted_at`,
+      `INSERT INTO people(id,display_name,given_name,middle_name,family_name,nickname,pronouns,photo_ref,cover_ref,is_self,is_favorite,is_archived,is_deceased,sync_exclusions_json,birth_year,birth_month,birth_day,death_year,death_month,death_day,memorial_note,about,jobs_json,how_we_met,created_at,updated_at,deleted_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET display_name=excluded.display_name,given_name=excluded.given_name,middle_name=excluded.middle_name,family_name=excluded.family_name,nickname=excluded.nickname,pronouns=excluded.pronouns,photo_ref=excluded.photo_ref,cover_ref=excluded.cover_ref,is_self=excluded.is_self,is_favorite=excluded.is_favorite,is_archived=excluded.is_archived,is_deceased=excluded.is_deceased,sync_exclusions_json=excluded.sync_exclusions_json,birth_year=excluded.birth_year,birth_month=excluded.birth_month,birth_day=excluded.birth_day,death_year=excluded.death_year,death_month=excluded.death_month,death_day=excluded.death_day,memorial_note=excluded.memorial_note,about=excluded.about,jobs_json=excluded.jobs_json,how_we_met=excluded.how_we_met,updated_at=excluded.updated_at,deleted_at=excluded.deleted_at`,
       [
         person.id,
         person.displayName,
@@ -766,6 +767,7 @@ export class SqliteKindyRepository implements KindyRepository {
         person.nickname ?? null,
         person.pronouns ?? null,
         person.photoRef ?? null,
+        person.coverRef ?? null,
         Number(person.isSelf ?? false),
         Number(person.isFavorite),
         Number(person.isArchived),

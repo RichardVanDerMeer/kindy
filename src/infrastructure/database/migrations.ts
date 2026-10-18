@@ -1,7 +1,7 @@
 import type { capSQLiteVersionUpgrade } from '@capacitor-community/sqlite'
 
 export const DATABASE_NAME = 'kindy'
-export const DATABASE_VERSION = 8
+export const DATABASE_VERSION = 9
 
 const migrationOne = `
 PRAGMA foreign_keys = ON;
@@ -282,6 +282,10 @@ ALTER TABLE people ADD COLUMN about TEXT;
 ALTER TABLE people ADD COLUMN jobs_json TEXT;
 `
 
+const migrationNine = `
+ALTER TABLE people ADD COLUMN cover_ref TEXT;
+`
+
 /**
  * Splits a migration into single statements. On Android the SQLite plugin
  * passes each entry to `execSQL`, which runs only the first statement of a
@@ -305,6 +309,7 @@ const versions: Array<[number, string]> = [
   [6, migrationSix],
   [7, migrationSeven],
   [8, migrationEight],
+  [9, migrationNine],
 ]
 
 export const migrations: capSQLiteVersionUpgrade[] = versions.map(([toVersion, sql]) => ({

@@ -94,6 +94,8 @@ export interface ExternalContactsGateway {
   updateContactPhoto(resourceName: string, photo: string): Promise<{ etag: string }>
   /** Withdraws Kindy's Google access for the account in use. */
   revoke(): Promise<void>
+  /** Shows the contact in the phone's Contacts app, or in Google Contacts on the web. */
+  openContact(resourceName: string): Promise<'app' | 'web'>
 }
 
 export interface NewExternalContact {

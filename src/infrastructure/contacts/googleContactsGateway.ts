@@ -19,6 +19,10 @@ interface GoogleContactsPlugin {
     accountEmail?: string
   }): Promise<ExternalContactsConnection>
   forget(): Promise<void>
+  openContact(options: {
+    resourceName: string
+    accountEmail?: string
+  }): Promise<{ opened: 'app' | 'web' }>
   listConnections(options: {
     pageToken?: string
     syncToken?: string
@@ -199,6 +203,7 @@ async function withFreshToken<T>(call: () => Promise<T>): Promise<T> {
 export const nativeGooglePlugin: GoogleContactsPlugin = {
   authorize: (options) => rawPlugin.authorize(options),
   forget: () => rawPlugin.forget(),
+  openContact: (options) => rawPlugin.openContact(options),
   revoke: (options) => rawPlugin.revoke(options),
   listConnections: (options) => withFreshToken(() => rawPlugin.listConnections(options)),
   getContact: (options) => withFreshToken(() => rawPlugin.getContact(options)),
@@ -397,6 +402,11 @@ class NativeGoogleContactsGateway implements ExternalContactsGateway {
     await nativePlugin.revoke({ accountEmail: accountInUse?.email })
     this.connection = null
   }
+
+  async openContact(resourceName: string): Promise<'app' | 'web'> {
+    return (await nativePlugin.openContact({ resourceName, accountEmail: accountInUse?.email }))
+      .opened
+  }
 }
 
 const previewContacts: ExternalContactSnapshot[] = [
@@ -568,6 +578,14 @@ class PreviewGoogleContactsGateway implements ExternalContactsGateway {
 
   async revoke(): Promise<void> {
     this.connection = null
+  }
+
+  async openContact(resourceName: string): Promise<'app' | 'web'> {
+    window.open(
+      `https://contacts.google.com/person/${resourceName.replace('people/', '')}`,
+      '_blank',
+    )
+    return 'web'
   }
 }
 
