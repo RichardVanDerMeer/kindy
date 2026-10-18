@@ -1,4 +1,6 @@
+import { effectiveEvents } from './events'
 import { calendarDay } from './agenda'
+import { jobLabel, jobsOf } from './jobs'
 import type { EntityId, Interaction, KindyData, PartialDate } from './model'
 
 export type TimelineKind =
@@ -11,6 +13,8 @@ export type TimelineKind =
   | 'memo'
   | 'interaction'
   | 'appointment'
+  | 'job-started'
+  | 'job-ended'
 
 export interface TimelineEntry {
   id: string
@@ -20,6 +24,12 @@ export interface TimelineEntry {
   otherPersonIds: EntityId[]
   title?: string
   interactionType?: Interaction['type']
+}
+
+/** A job month ("2021-04") as a date on the first; unknown months have no year. */
+function monthDate(month: string | undefined): PartialDate {
+  const [year, value] = (month ?? '').split('-').map(Number)
+  return year && value ? { year, month: value, day: 1 } : { year: null, month: 1, day: 1 }
 }
 
 function sortKey(date: PartialDate): number {
@@ -41,7 +51,7 @@ export function personTimeline(
   if (person.birthDate) {
     entries.push({ id: 'born', kind: 'born', date: person.birthDate, otherPersonIds: [] })
   }
-  for (const event of data.events) {
+  for (const event of effectiveEvents(data)) {
     if (!event.personIds.includes(personId)) continue
     const kinds: Partial<Record<typeof event.type, TimelineKind>> = {
       'wedding-anniversary': 'married',
@@ -73,6 +83,28 @@ export function personTimeline(
       otherPersonIds: [],
       title: reminder.title,
     })
+  }
+  // Work history: when a job began and ended. A job without a start date has no place
+  // in time and is listed with the undated entries.
+  for (const job of jobsOf(person)) {
+    const label = jobLabel(job)
+    if (!label) continue
+    entries.push({
+      id: `job-${job.id}`,
+      kind: 'job-started',
+      date: monthDate(job.startedOn),
+      otherPersonIds: [],
+      title: label,
+    })
+    if (job.endedOn) {
+      entries.push({
+        id: `job-end-${job.id}`,
+        kind: 'job-ended',
+        date: monthDate(job.endedOn),
+        otherPersonIds: [],
+        title: label,
+      })
+    }
   }
   for (const link of data.calendarLinks) {
     if (link.status !== 'linked' || !link.personIds.includes(personId)) continue

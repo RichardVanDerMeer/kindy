@@ -6,8 +6,10 @@ import { useI18n } from 'vue-i18n'
 import {
   connectionRoleGroups,
   isChildRole,
+  isSiblingRole,
   partnerChildSuggestions,
   partnerIds,
+  siblingTargets,
 } from '@/domain/connections'
 import type { Person, Relationship, RelationshipRole } from '@/domain/model'
 
@@ -35,7 +37,10 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   close: []
-  save: [connections: ConnectionDraft[], options: { alsoForPartnerId?: string }]
+  save: [
+    connections: ConnectionDraft[],
+    options: { alsoForPartnerId?: string; alsoForSiblings?: boolean },
+  ]
 }>()
 
 const { t } = useI18n()
@@ -44,6 +49,7 @@ const rows = ref<ConnectionDraft[]>([{}])
 const picking = ref<number | null>(null)
 const pickerSelection = ref<string[]>([])
 const alsoForPartner = ref(true)
+const alsoForSiblings = ref(true)
 
 watch(
   () => props.open,
@@ -52,6 +58,7 @@ watch(
     rows.value = [{}]
     picking.value = null
     alsoForPartner.value = true
+    alsoForSiblings.value = true
   },
 )
 
@@ -77,6 +84,19 @@ const offersPartner = computed(
       (row) => row.role && isChildRole(row.role) && row.personId !== partner.value?.id,
     ),
 )
+
+/** Adding a brother or sister: offer to place them with the parents or other siblings. */
+const siblingOffer = computed(() => {
+  if (!rows.value.some((row) => row.role && isSiblingRole(row.role))) return null
+  const targets = siblingTargets(props.subject.id, props.relationships)
+  if (!targets) return null
+  const names = targets.personIds
+    .map((id) => personById(id))
+    .map((person) => person?.givenName ?? person?.displayName)
+    .filter(Boolean)
+    .join(' & ')
+  return names ? { kind: targets.kind, names } : null
+})
 
 function rowName(row: ConnectionDraft): string | undefined {
   if (row.newPerson) return [row.newPerson.givenName, row.newPerson.familyName].join(' ').trim()
@@ -142,6 +162,7 @@ function submit(): void {
     complete.value.map((row) => ({ ...row, newPerson: row.newPerson && { ...row.newPerson } })),
     {
       alsoForPartnerId: offersPartner.value && alsoForPartner.value ? partner.value?.id : undefined,
+      alsoForSiblings: Boolean(siblingOffer.value) && alsoForSiblings.value,
     },
   )
 }
@@ -254,6 +275,14 @@ function submit(): void {
             <Plus :size="16" /> {{ t('connections.addRow') }}
           </button>
 
+          <label v-if="siblingOffer" class="check-field">
+            <input v-model="alsoForSiblings" type="checkbox" />
+            <span>{{
+              siblingOffer.kind === 'parents'
+                ? t('connections.alsoParents', { names: siblingOffer.names })
+                : t('connections.alsoSiblings', { names: siblingOffer.names })
+            }}</span>
+          </label>
           <label v-if="offersPartner && partner" class="check-field">
             <input v-model="alsoForPartner" type="checkbox" />
             <span>{{

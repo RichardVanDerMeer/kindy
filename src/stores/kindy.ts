@@ -7,15 +7,23 @@ import { buildAgenda, calendarDay } from '@/domain/agenda'
 import type { AgendaDraft } from '@/domain/agendaDraft'
 import { createBackup, isWorthBackingUp, readBackup } from '@/domain/backup'
 import { sameOccurrence, suggestCalendarLinks, type DeviceCalendarEvent } from '@/domain/calendar'
-import { createConnection, isChildRole } from '@/domain/connections'
+import {
+  childRoleForSibling,
+  createConnection,
+  isChildRole,
+  isSiblingRole,
+  siblingTargets,
+} from '@/domain/connections'
 import { enqueueSync, importedContactDates, managedContactFields } from '@/domain/contactSync'
 import { normalizeContactLabel } from '@/domain/contactLabels'
+import { effectiveEvents, isWeddingDay } from '@/domain/events'
 import { applyRemoteContact } from '@/domain/incomingContacts'
 import { safeWebUrl } from '@/domain/links'
 import {
   KINDY_SCHEMA_VERSION,
   type Circle,
   type ContactPoint,
+  type ImportantEvent,
   type KindyData,
   type PartialDate,
   type Job,
@@ -218,6 +226,14 @@ function forgetSyncTokens(account: KindyAccount): void {
 }
 
 export type ContactSyncStatus = 'local' | 'synced' | 'pending' | 'failed'
+
+function sameWedding(left: ImportantEvent, right: ImportantEvent): boolean {
+  return (
+    left.date.month === right.date.month &&
+    left.date.day === right.date.day &&
+    left.personIds.some((personId) => right.personIds.includes(personId))
+  )
+}
 
 /** Death events written in any language Kindy supports. */
 function deathLabels(): string[] {
@@ -783,7 +799,7 @@ export const useKindyStore = defineStore('kindy', () => {
   async function addConnections(
     subjectId: string,
     connections: Array<{ personId: string; role: RelationshipRole }>,
-    options: { alsoForPartnerId?: string } = {},
+    options: { alsoForPartnerId?: string; alsoForSiblings?: boolean } = {},
   ): Promise<{ added: number; skipped: number }> {
     let added = 0
     let skipped = 0
@@ -804,6 +820,20 @@ export const useKindyStore = defineStore('kindy', () => {
         const partnerId = options.alsoForPartnerId
         if (partnerId && partnerId !== connection.personId && isChildRole(connection.role)) {
           link(partnerId, connection.personId, connection.role)
+        }
+        // A brother or sister also belongs with the subject's parents, or next to the other siblings.
+        const targets = options.alsoForSiblings
+          ? siblingTargets(subjectId, draft.relationships)
+          : null
+        if (targets && isSiblingRole(connection.role)) {
+          for (const targetId of targets.personIds) {
+            if (targetId === connection.personId) continue
+            if (targets.kind === 'parents') {
+              link(targetId, connection.personId, childRoleForSibling(connection.role))
+            } else {
+              link(targetId, connection.personId, connection.role)
+            }
+          }
         }
       }
     })
@@ -1175,6 +1205,13 @@ export const useKindyStore = defineStore('kindy', () => {
     })
   }
 
+  /** Opens a linked appointment in the phone's calendar app. */
+  async function openInCalendar(linkId: string): Promise<void> {
+    const link = data.value?.calendarLinks.find((candidate) => candidate.id === linkId)
+    if (!link) return
+    await getDeviceCalendarGateway().openEvent(link.eventId, link.startsAt, link.endsAt)
+  }
+
   async function ignoreCalendarEvent(event: DeviceCalendarEvent): Promise<void> {
     await mutate((draft) => {
       draft.calendarLinks.push({
@@ -1362,9 +1399,24 @@ export const useKindyStore = defineStore('kindy', () => {
     await mutate((draft) => {
       const event = draft.events.find((candidate) => candidate.id === eventId)
       if (!event) return
-      draft.events = draft.events.filter((candidate) => candidate.id !== eventId)
+      // A wedding day is shown once per couple: remove every copy of it, from Kindy and Google.
+      const shown = effectiveEvents(draft).find(
+        (candidate) => candidate.id === eventId || sameWedding(candidate, event),
+      )
+      const people = new Set([...event.personIds, ...(shown?.personIds ?? [])])
+      draft.events = draft.events.filter(
+        (candidate) =>
+          candidate.id !== eventId &&
+          !(
+            isWeddingDay(event) &&
+            isWeddingDay(candidate) &&
+            candidate.date.month === event.date.month &&
+            candidate.date.day === event.date.day &&
+            candidate.personIds.some((personId) => people.has(personId))
+          ),
+      )
       if (event.type === 'wedding-anniversary' || event.type === 'anniversary') {
-        queueContactUpdates(draft, event.personIds, ['events'])
+        queueContactUpdates(draft, [...people], ['events'])
       }
     })
     void syncGoogle()
@@ -1506,6 +1558,7 @@ export const useKindyStore = defineStore('kindy', () => {
     connectCalendar,
     linkCalendarEvent,
     ignoreCalendarEvent,
+    openInCalendar,
     unlinkCalendarEvent,
     dismissCalendarPrompt,
     linkEventToPerson,

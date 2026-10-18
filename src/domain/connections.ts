@@ -258,3 +258,74 @@ export function partnerChildSuggestions(
       .map((child) => ({ ...child, viaPartnerId: partnerId })),
   )
 }
+
+/** A person's parents. */
+export function parentIds(personId: EntityId, relationships: Relationship[]): EntityId[] {
+  return relationships
+    .filter(
+      (relationship) =>
+        !relationship.endedOn &&
+        relationship.type === 'parent-of' &&
+        relationship.toPersonId === personId,
+    )
+    .map((relationship) => relationship.fromPersonId)
+}
+
+export function isSiblingRole(role: RelationshipRole): boolean {
+  return relationshipTypeForRole(role) === 'sibling-of'
+}
+
+/** "Brother" seen from a parent is "son", and so on. */
+export function childRoleForSibling(role: RelationshipRole): RelationshipRole {
+  if (role === 'brother') return 'son'
+  if (role === 'sister') return 'daughter'
+  return 'child'
+}
+
+/**
+ * Where a new sibling of the subject also belongs: with the subject's parents
+ * when they are known (siblings then follow from the family tree), otherwise
+ * next to the subject's other siblings.
+ */
+export function siblingTargets(
+  subjectId: EntityId,
+  relationships: Relationship[],
+): { kind: 'parents' | 'siblings'; personIds: EntityId[] } | null {
+  const parents = parentIds(subjectId, relationships)
+  if (parents.length) return { kind: 'parents', personIds: parents }
+  const siblings = siblingIds(subjectId, relationships)
+  return siblings.length ? { kind: 'siblings', personIds: siblings } : null
+}
+
+/**
+ * Blended families: the partner's children who are not the subject's own.
+ * Shown with the children, marked as the partner's.
+ */
+export function stepChildren(
+  subjectId: EntityId,
+  relationships: Relationship[],
+): Array<{ personId: EntityId; viaId: EntityId }> {
+  const own = new Set(childrenOf(subjectId, relationships).map((child) => child.personId))
+  const seen = new Set<EntityId>()
+  return partnerIds(subjectId, relationships).flatMap((partnerId) =>
+    childrenOf(partnerId, relationships)
+      .filter((child) => child.personId !== subjectId && !own.has(child.personId))
+      .filter((child) => !seen.has(child.personId) && Boolean(seen.add(child.personId)))
+      .map((child) => ({ personId: child.personId, viaId: partnerId })),
+  )
+}
+
+/** A parent's partner who is not the subject's parent: shown with the parents, marked as such. */
+export function stepParents(
+  subjectId: EntityId,
+  relationships: Relationship[],
+): Array<{ personId: EntityId; viaId: EntityId }> {
+  const parents = parentIds(subjectId, relationships)
+  const seen = new Set<EntityId>(parents)
+  return parents.flatMap((parentId) =>
+    partnerIds(parentId, relationships)
+      .filter((partnerId) => partnerId !== subjectId && !seen.has(partnerId))
+      .filter((partnerId) => Boolean(seen.add(partnerId)))
+      .map((partnerId) => ({ personId: partnerId, viaId: parentId })),
+  )
+}

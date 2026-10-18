@@ -15,6 +15,7 @@ interface CalendarPlugin {
   listEvents(options: { from: number; to: number }): Promise<{ events: DeviceCalendarEvent[] }>
   createEvent(options: NewCalendarEvent): Promise<{ id: string }>
   updateEvent(options: { id: string } & Omit<NewCalendarEvent, 'calendarId'>): Promise<void>
+  openEvent(options: { id: string; startsAt: number; endsAt?: number }): Promise<void>
 }
 
 const nativePlugin = registerPlugin<CalendarPlugin>('KindyCalendar')
@@ -48,6 +49,10 @@ class NativeDeviceCalendarGateway implements DeviceCalendarGateway {
 
   async updateEvent(id: string, input: Omit<NewCalendarEvent, 'calendarId'>): Promise<void> {
     await nativePlugin.updateEvent({ id, ...input })
+  }
+
+  async openEvent(id: string, startsAt: number, endsAt?: number): Promise<void> {
+    await nativePlugin.openEvent({ id, startsAt, endsAt })
   }
 }
 
@@ -96,6 +101,11 @@ function previewSeed(): DeviceCalendarEvent[] {
 
 /** Browser stand-in for the phone's calendar, kept in local storage. */
 class PreviewDeviceCalendarGateway implements DeviceCalendarGateway {
+  /** The browser has no calendar app; the preview only says what would open. */
+  async openEvent(id: string): Promise<void> {
+    console.info(`Preview: would open calendar appointment ${id}`)
+  }
+
   async permission(): Promise<CalendarPermission> {
     return this.read(PREVIEW_PERMISSION_KEY) === 'granted' ? 'granted' : 'prompt'
   }

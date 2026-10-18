@@ -97,6 +97,12 @@ export function managedContactFields(
         !divorceEnding(event, data.events),
     )
     .map((event) => ({ type: ANNIVERSARY_EVENT_TYPE, date: toContactDate(event.date) }))
+    // A wedding day entered in Kindy and the same one read from Google are written once.
+    .filter(
+      (event, index, all) =>
+        all.findIndex((other) => JSON.stringify(other.date) === JSON.stringify(event.date)) ===
+        index,
+    )
   if (person?.isDeceased && person.deathDate) {
     events.push({ type: labels.death, date: toContactDate(person.deathDate) })
   }

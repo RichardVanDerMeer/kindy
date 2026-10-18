@@ -161,6 +161,14 @@ async function unlink(): Promise<void> {
         <p class="dialog-question">{{ $t('agendaAdd.appointment.people') }}</p>
         <PersonPicker v-model="personIds" :candidates="store.people" />
 
+        <button
+          v-if="linkId"
+          type="button"
+          class="inline-action"
+          v-async-click="() => store.openInCalendar(linkId as string)"
+        >
+          <CalendarClock :size="16" /> {{ $t('calendar.openInCalendar') }}
+        </button>
         <p v-if="error" class="form-error" role="alert">{{ error }}</p>
         <div class="dialog__actions">
           <button type="button" class="button button--ghost button--danger" @click="unlink">

@@ -134,7 +134,9 @@ const whatsappNumber = computed(() => phone.value?.replace(/[^\d]/g, ''))
 /** Without other buttons the gift sits next to the circle, and the card stays one row high. */
 const hasContactActions = computed(() => Boolean(phone.value || email.value || editable.value))
 const giftInRow = computed(() => !props.compact && openWishes.value > 0 && !hasContactActions.value)
-const hasActionRow = computed(() => !props.compact && hasContactActions.value)
+const hasActionRow = computed(
+  () => !props.compact && (hasContactActions.value || props.item.kind === 'appointment'),
+)
 
 function open(): void {
   if (primary.value) void router.push(`/people/${primary.value.id}`)
@@ -244,6 +246,15 @@ function open(): void {
         @click="edit"
       >
         <Pencil :size="17" />
+      </button>
+      <button
+        v-if="item.kind === 'appointment'"
+        type="button"
+        class="contact-action"
+        v-async-click="() => store.openInCalendar(item.id)"
+      >
+        <CalendarClock :size="17" />
+        <span>{{ t('calendar.openInCalendar') }}</span>
       </button>
       <RouterLink
         v-if="openWishes && primary"

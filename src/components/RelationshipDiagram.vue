@@ -11,6 +11,8 @@ export interface DisplayRelationship {
   customLabel?: string
   displayLabel?: string
   person?: Person
+  /** Family through a partner: a partner's child, or a parent's partner. */
+  step?: boolean
 }
 
 const props = defineProps<{
@@ -70,6 +72,7 @@ function select(person?: Person): void {
             v-for="relationship in parents"
             :key="relationship.id"
             class="connection-person"
+            :class="{ 'connection-person--step': relationship.step }"
             @click="select(relationship.person)"
           >
             <PersonAvatar
@@ -134,6 +137,7 @@ function select(person?: Person): void {
             v-for="relationship in children"
             :key="relationship.id"
             class="connection-person"
+            :class="{ 'connection-person--step': relationship.step }"
             @click="select(relationship.person)"
           >
             <PersonAvatar
@@ -156,6 +160,7 @@ function select(person?: Person): void {
             v-for="relationship in siblings"
             :key="relationship.id"
             class="connection-person"
+            :class="{ 'connection-person--step': relationship.step }"
             @click="select(relationship.person)"
           >
             <PersonAvatar

@@ -3,6 +3,7 @@ package nl.richardvandermeer.kindy.calendar
 import android.Manifest
 import android.content.ContentUris
 import android.content.ContentValues
+import android.content.Intent
 import android.provider.CalendarContract
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
@@ -178,6 +179,28 @@ class KindyCalendarPlugin : Plugin() {
      * Updates an appointment by id. The app only calls this for appointments it
      * created itself; appointments from other sources are never changed.
      */
+    /** Opens one appointment in the phone's calendar app, at the right occurrence. */
+    @PluginMethod
+    fun openEvent(call: PluginCall) {
+        val id = call.getString("id")?.toLongOrNull()
+        val startsAt = call.getLong("startsAt")
+        if (id == null || startsAt == null) {
+            call.reject("An appointment id and start are required")
+            return
+        }
+        try {
+            val intent = Intent(Intent.ACTION_VIEW)
+                .setData(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id))
+                .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, startsAt)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            call.getLong("endsAt")?.let { intent.putExtra(CalendarContract.EXTRA_EVENT_END_TIME, it) }
+            context.startActivity(intent)
+            call.resolve()
+        } catch (error: Exception) {
+            call.reject("No calendar app can open this appointment", error)
+        }
+    }
+
     @PluginMethod
     fun updateEvent(call: PluginCall) {
         if (!hasCalendarAccess(call)) return

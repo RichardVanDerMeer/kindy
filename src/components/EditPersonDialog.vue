@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import { ImagePlus, Plus, Trash2, X } from '@lucide/vue'
 
-import { readImageFile } from '@/composables/imageFile'
 import { emailLabels, normalizeContactLabel, phoneLabels } from '@/domain/contactLabels'
 import type { PartialDate, Person } from '@/domain/model'
 import { jobsOf } from '@/domain/jobs'
@@ -10,6 +9,7 @@ import { isSocialPlatform, socialPlatforms } from '@/domain/social'
 import { useKindyStore, type PersonEdit } from '@/stores/kindy'
 
 import LabelledListInput from './LabelledListInput.vue'
+import PhotoCropDialog from './PhotoCropDialog.vue'
 import PartialDateInput from './PartialDateInput.vue'
 import PersonAvatar from './PersonAvatar.vue'
 import SocialIcon from './SocialIcon.vue'
@@ -80,11 +80,18 @@ watch(
   },
 )
 
-async function pickPhoto(event: Event): Promise<void> {
+/** A picked photo opens in the cropper first, to move and zoom it into the frame. */
+const cropFile = ref<File | null>(null)
+
+function pickPhoto(event: Event): void {
   const file = (event.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  draft.value.photoRef = await readImageFile(file, { maxSize: 512, square: true })
   if (fileInput.value) fileInput.value.value = ''
+  if (file) cropFile.value = file
+}
+
+function useCroppedPhoto(photo: string): void {
+  draft.value.photoRef = photo
+  cropFile.value = null
 }
 
 async function useGooglePhoto(): Promise<void> {
@@ -346,6 +353,7 @@ async function submit(): Promise<void> {
           </button>
         </div>
       </form>
+      <PhotoCropDialog :file="cropFile" @close="cropFile = null" @done="useCroppedPhoto" />
     </div>
   </Teleport>
 </template>

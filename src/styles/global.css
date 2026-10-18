@@ -584,6 +584,19 @@ h2 {
   gap: var(--space-2);
 }
 
+/* In a long, scrolling sheet Cancel and Save stay in reach */
+.dialog--scroll .dialog__actions {
+  position: sticky;
+  z-index: 2;
+  bottom: calc((var(--space-5) + env(safe-area-inset-bottom)) * -1);
+  margin: var(--space-4) calc(var(--space-5) * -1)
+    calc((var(--space-5) + env(safe-area-inset-bottom)) * -1);
+  padding: var(--space-3) var(--space-5) calc(var(--space-5) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+}
+
 .google-import-option {
   display: grid;
   width: 100%;
@@ -678,6 +691,10 @@ h2 {
 
 .privacy-callout svg {
   flex: 0 0 auto;
+}
+
+.contacts-intro .privacy-callout {
+  margin-bottom: var(--space-5);
 }
 
 .privacy-callout p {
@@ -789,7 +806,8 @@ h2 {
 }
 
 .profile-view {
-  padding-bottom: var(--space-5);
+  /* Room for the navigation bar, which stays on profiles too. */
+  padding-bottom: calc(var(--space-8) + 40px);
 }
 
 .profile-hero {
@@ -1140,6 +1158,16 @@ button.connection-person:focus-visible {
 .connection-person .in-memory-label {
   color: #765f83;
   font-weight: 800;
+}
+
+/* Family through a partner: same place in the tree, a dashed ring sets it apart */
+.connection-person--step .avatar {
+  outline: 2px dashed rgba(124, 77, 255, 0.45);
+  outline-offset: 2px;
+}
+
+.connection-person--step small {
+  font-style: italic;
 }
 
 .connection-person--subject {
@@ -1575,6 +1603,76 @@ button.connection-person:focus-visible {
 
 .inline-form-heading--back h2 {
   margin: 0;
+}
+
+/* Hints in the appointment editor: written to the calendar too, or read from it */
+.sync-hint,
+.edit-sync-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 var(--space-3);
+  font-size: 0.86rem;
+}
+
+.sync-hint {
+  color: #267453;
+  font-weight: 600;
+}
+
+.edit-sync-hint {
+  color: var(--color-text-muted);
+}
+
+/* Photo cropper: move and zoom inside a round frame */
+.photo-crop {
+  text-align: center;
+}
+
+.photo-crop__frame {
+  position: relative;
+  margin: var(--space-4) auto;
+  overflow: hidden;
+  border-radius: var(--radius-medium);
+  background: #1c1530;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.photo-crop__frame:active {
+  cursor: grabbing;
+}
+
+.photo-crop__frame img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+.photo-crop__mask {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 999px rgba(28, 21, 48, 0.55);
+  pointer-events: none;
+}
+
+.photo-crop__zoom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 auto var(--space-4);
+  max-width: 280px;
+  color: var(--color-text-muted);
+}
+
+.photo-crop__zoom input {
+  flex: 1;
+  accent-color: var(--color-primary);
 }
 
 /* Feedback and motion: every tap answers at once (reduced motion is honoured below) */
@@ -2264,12 +2362,14 @@ button.connection-person:focus-visible {
   flex-wrap: wrap;
 }
 
-.agenda-card__actions a.contact-action:has(span) {
+.agenda-card__actions .contact-action:has(span) {
   width: auto;
   height: 38px;
   gap: 6px;
   padding: 0 14px;
+  border: 0;
   border-radius: 999px;
+  font: inherit;
   font-size: 0.86rem;
   font-weight: 700;
   text-decoration: none;

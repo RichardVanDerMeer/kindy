@@ -1,4 +1,5 @@
 import { jobsOf } from './jobs'
+import { effectiveEvents } from './events'
 import { divorceEnding } from './marriage'
 import type { EntityId, ImportantEvent, Job, KindyData, PartialDate } from './model'
 
@@ -140,11 +141,13 @@ export function buildAgenda(
   }
 
   const birthdayEventPeople = new Set<EntityId>()
-  for (const event of data.events) {
+  // Wedding days from Google and Kindy, shown once per couple.
+  const events = effectiveEvents(data)
+  for (const event of events) {
     const personIds = event.personIds.filter((id) => activePeople.has(id))
     if (event.personIds.length && !personIds.length) continue
     // A marriage that ended in divorce is no longer celebrated; other marriages still are.
-    if (divorceEnding(event, data.events)) continue
+    if (divorceEnding(event, events)) continue
     if (event.type === 'birthday') event.personIds.forEach((id) => birthdayEventPeople.add(id))
     addEventOccurrences(event, personIds)
   }

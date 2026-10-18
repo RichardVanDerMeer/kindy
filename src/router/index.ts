@@ -8,6 +8,7 @@ import PersonView from '@/views/PersonView.vue'
 import SettingsView from '@/views/SettingsView.vue'
 import UpcomingView from '@/views/UpcomingView.vue'
 
+/** The navigation bar is always shown, so Home is one tap away from any screen. */
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -18,7 +19,6 @@ const router = createRouter({
       name: 'person',
       component: PersonView,
       props: true,
-      meta: { showNavigation: false },
     },
     { path: '/circles', name: 'circles', component: CirclesView },
     {
@@ -26,7 +26,6 @@ const router = createRouter({
       name: 'circle',
       component: CircleView,
       props: true,
-      meta: { showNavigation: false },
     },
     { path: '/upcoming', name: 'upcoming', component: UpcomingView },
     { path: '/search', redirect: '/' },
@@ -34,7 +33,6 @@ const router = createRouter({
       path: '/settings',
       name: 'settings',
       component: SettingsView,
-      meta: { showNavigation: false },
     },
   ],
   // A hash such as #wishlist scrolls to that part of a profile.

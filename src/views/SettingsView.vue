@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import {
   ArrowDownAZ,
-  Apple,
   ArrowLeft,
   CalendarDays,
   CloudUpload,
   DatabaseBackup,
   ContactRound,
-  FileSpreadsheet,
   LayoutGrid,
   Languages,
   LockKeyhole,
@@ -168,28 +166,6 @@ const nameOrders: NameOrder[] = ['given-first', 'family-first']
       @close="accountAction = null"
       @done="accountAction = null"
     />
-
-    <article class="card settings-card settings-card--soon">
-      <div class="settings-card__icon"><Apple :size="24" /></div>
-      <div class="settings-card__copy">
-        <div class="settings-title-row">
-          <h2>{{ $t('settings.appleContacts') }}</h2>
-          <span class="status-pill status-pill--muted">{{ $t('settings.comingSoon') }}</span>
-        </div>
-        <p>{{ $t('settings.appleContactsHint') }}</p>
-      </div>
-    </article>
-
-    <article class="card settings-card settings-card--soon">
-      <div class="settings-card__icon"><FileSpreadsheet :size="24" /></div>
-      <div class="settings-card__copy">
-        <div class="settings-title-row">
-          <h2>{{ $t('settings.fileImport') }}</h2>
-          <span class="status-pill status-pill--muted">{{ $t('settings.comingSoon') }}</span>
-        </div>
-        <p>{{ $t('settings.fileImportHint') }}</p>
-      </div>
-    </article>
 
     <h2 class="section-title">{{ $t('calendar.settingsTitle') }}</h2>
     <article class="card settings-card">

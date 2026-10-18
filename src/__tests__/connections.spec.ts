@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  childRoleForSibling,
   childrenOf,
   connectionRoleGroups,
   createConnection,
   isChildRole,
   partnerChildSuggestions,
   partnerIds,
+  siblingTargets,
+  stepChildren,
+  stepParents,
 } from '@/domain/connections'
 import type { Relationship } from '@/domain/model'
 
@@ -60,5 +64,34 @@ describe('connection helpers', () => {
 
   it('suggests nothing without a partner', () => {
     expect(partnerChildSuggestions('cas', family())).toEqual([])
+  })
+})
+
+describe('new brothers and sisters', () => {
+  it('places them with the parents when those are known', () => {
+    expect(siblingTargets('cas', family())).toEqual({ kind: 'parents', personIds: ['bas', 'anna'] })
+  })
+
+  it('places them next to the other siblings when no parents are known', () => {
+    const relationships = [createConnection('s', 'eva', 'finn', 'brother', [])]
+    expect(siblingTargets('eva', relationships)).toEqual({ kind: 'siblings', personIds: ['finn'] })
+  })
+
+  it('names the role a parent sees', () => {
+    expect(childRoleForSibling('sister')).toBe('daughter')
+    expect(childRoleForSibling('sibling')).toBe('child')
+  })
+})
+
+describe('blended families', () => {
+  it('shows the partner’s child who is not the person’s own', () => {
+    // Anna and Bas are partners; Dirk is Bas's daughter only.
+    expect(stepChildren('anna', family())).toEqual([{ personId: 'dirk', viaId: 'bas' }])
+    expect(stepChildren('bas', family())).toEqual([])
+  })
+
+  it('shows a parent’s partner who is not the child’s parent', () => {
+    expect(stepParents('dirk', family())).toEqual([{ personId: 'anna', viaId: 'bas' }])
+    expect(stepParents('cas', family())).toEqual([])
   })
 })

@@ -45,7 +45,13 @@ import SocialIcon from '@/components/SocialIcon.vue'
 import RelationshipDiagram from '@/components/RelationshipDiagram.vue'
 import { calendarDay } from '@/domain/agenda'
 import type { AgendaDraft } from '@/domain/agendaDraft'
-import { inferGender, relationshipViewFor, siblingIds } from '@/domain/connections'
+import {
+  inferGender,
+  relationshipViewFor,
+  siblingIds,
+  stepChildren,
+  stepParents,
+} from '@/domain/connections'
 import { ageBetween, formatPartialDate } from '@/domain/dates'
 import { isKnownLabel, normalizeContactLabel } from '@/domain/contactLabels'
 import { isCurrentJob, jobLabel, jobsOf } from '@/domain/jobs'
@@ -147,8 +153,34 @@ const siblings = computed(() => {
     .filter((relationship) => relationship.person)
 })
 
+/** Blended families: a partner's children and a parent's partner, marked as such. */
+const stepRelationships = computed(() => {
+  const all = store.data?.relationships ?? []
+  const via = (id: string) => {
+    const person = store.personById(id)
+    return person?.givenName ?? person?.displayName ?? ''
+  }
+  return [
+    ...stepChildren(props.id, all).map((entry) => ({
+      id: `step-child-${entry.personId}`,
+      displayType: 'parent-of' as const,
+      displayLabel: t('connections.childOf', { name: via(entry.viaId) }),
+      person: store.personById(entry.personId),
+      step: true,
+    })),
+    ...stepParents(props.id, all).map((entry) => ({
+      id: `step-parent-${entry.personId}`,
+      displayType: 'child-of' as const,
+      displayLabel: t('connections.partnerOf', { name: via(entry.viaId) }),
+      person: store.personById(entry.personId),
+      step: true,
+    })),
+  ].filter((relationship) => relationship.person)
+})
+
 const diagramRelationships = computed(() => [
   ...relationships.value.filter((relationship) => relationship.displayType !== 'sibling-of'),
+  ...stepRelationships.value,
   ...siblings.value,
 ])
 
@@ -286,6 +318,15 @@ function formatDate(date: PartialDate): string {
   return formatPartialDate(date, locale.value)
 }
 
+/** Jobs are known by month: "April 2021"; one without a start date shows no date. */
+function entryDate(entry: TimelineEntry): string {
+  if (entry.kind !== 'job-started' && entry.kind !== 'job-ended') return formatDate(entry.date)
+  if (entry.date.year === null) return ''
+  return new Intl.DateTimeFormat(locale.value, { month: 'long', year: 'numeric' }).format(
+    new Date(entry.date.year, entry.date.month - 1, 1),
+  )
+}
+
 function whatsapp(value: string): string {
   return `https://wa.me/${value.replace(/[^\d]/g, '')}`
 }
@@ -307,6 +348,10 @@ function timelineTitle(entry: TimelineEntry): string {
       return names ? t('timeline.marriedTo', { names }) : t('timeline.married')
     case 'divorced':
       return names ? t('timeline.divorcedFrom', { names }) : t('timeline.divorced')
+    case 'job-started':
+      return t('timeline.jobStarted', { job: entry.title })
+    case 'job-ended':
+      return t('timeline.jobEnded', { job: entry.title })
     default:
       return entry.title ?? t(`timeline.${entry.kind}`)
   }
@@ -329,6 +374,9 @@ function timelineIcon(entry: TimelineEntry) {
       return CalendarClock
     case 'custom':
       return CalendarPlus
+    case 'job-started':
+    case 'job-ended':
+      return BriefcaseBusiness
     default:
       return CalendarDays
   }
@@ -357,7 +405,7 @@ const savingConnections = ref(false)
 /** Saves several connections at once; new names become real people (and Google contacts) first. */
 async function addConnections(
   drafts: ConnectionDraft[],
-  options: { alsoForPartnerId?: string },
+  options: { alsoForPartnerId?: string; alsoForSiblings?: boolean },
 ): Promise<void> {
   savingConnections.value = true
   try {
@@ -822,7 +870,7 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
               }}</template>
               <Trash2 v-else :size="15" />
             </button>
-            <time>{{ formatDate(entry.date) }}</time>
+            <time>{{ entryDate(entry) }}</time>
             <strong>{{ timelineTitle(entry) }}</strong>
             <span v-if="timelinePeople(entry).length > 1" class="avatar-pair">
               <PersonAvatar
@@ -844,7 +892,7 @@ async function saveNote(input: { body: string; occurredAt: number }): Promise<vo
           :key="entry.id"
           class="card life-timeline__body life-timeline__body--undated"
         >
-          <time>{{ formatDate(entry.date) }}</time>
+          <time>{{ entryDate(entry) }}</time>
           <strong>{{ timelineTitle(entry) }}</strong>
         </article>
       </template>

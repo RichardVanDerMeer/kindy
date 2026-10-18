@@ -235,4 +235,6 @@ export interface DeviceCalendarGateway {
   createEvent(input: NewCalendarEvent): Promise<{ id: string }>
   /** Changes title, time or place of an appointment Kindy created earlier. */
   updateEvent(id: string, input: Omit<NewCalendarEvent, 'calendarId'>): Promise<void>
+  /** Shows the appointment in the phone's own calendar app. */
+  openEvent(id: string, startsAt: number, endsAt?: number): Promise<void>
 }
